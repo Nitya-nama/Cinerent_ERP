@@ -9,6 +9,7 @@ from middleware.auth_middleware import require_auth
 from routes.analytics_routes import analytics_bp
 from config.db import mongo
 from routes.auth_routes import auth_bp
+
 import os
 
 # load env from server folder
@@ -16,8 +17,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
-
+CORS(
+    app,
+    resources={r"/*": {"origins": "*"}},
+    supports_credentials=True
+)
 # MongoDB
 app.config["MONGO_URI"] = os.getenv("MONGO_URI")
 print("MONGO URI =", os.getenv("MONGO_URI"))

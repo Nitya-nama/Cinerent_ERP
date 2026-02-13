@@ -21,10 +21,15 @@ export default function Analytics() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  /* ---------- LOAD ANALYTICS (FIXED) ---------- */
+  // Utilization
+  const [utilization, setUtilization] = useState([]);
+
+  /* ---------- LOAD ANALYTICS ---------- */
   const loadAnalytics = useCallback(async () => {
     try {
       setLoading(true);
+
+      // Dashboard stats
       const res = await api.get("/analytics/dashboard", {
         params: {
           year,
@@ -33,6 +38,11 @@ export default function Analytics() {
         }
       });
       setData(res.data);
+
+      // Equipment utilization
+      const utilRes = await api.get("/analytics/utilization");
+      setUtilization(utilRes.data || []);
+
     } catch (err) {
       console.error("Failed loading analytics", err);
     } finally {
@@ -55,29 +65,30 @@ export default function Analytics() {
   ];
 
   const COLORS = ["#facc15", "#60a5fa", "#fb923c", "#22c55e"];
+
+  /* ---------- EXPORT EXCEL ---------- */
   const exportExcel = async () => {
-  try {
-    const res = await api.get("/analytics/export", {
-      responseType: "blob" // 👈 IMPORTANT
-    });
+    try {
+      const res = await api.get("/analytics/export", {
+        responseType: "blob"
+      });
 
-    const blob = new Blob([res.data], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    });
+      const blob = new Blob([res.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      });
 
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "cinerent_analytics.xlsx";
-    link.click();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "cinerent_analytics.xlsx";
+      link.click();
 
-    window.URL.revokeObjectURL(url);
-  } catch (err) {
-    alert("Export failed");
-    console.error(err);
-  }
-};
-
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Export failed");
+      console.error(err);
+    }
+  };
 
   return (
     <div className="p-6">
@@ -132,13 +143,13 @@ export default function Analytics() {
         >
           Reset
         </button>
-        <button
-        onClick={exportExcel}
-        className="bg-black text-white px-4 py-2 rounded"
-        >
-        Export Excel
-        </button>
 
+        <button
+          onClick={exportExcel}
+          className="bg-black text-white px-4 py-2 rounded"
+        >
+          Export Excel
+        </button>
       </div>
 
       {/* CHARTS */}
@@ -156,6 +167,22 @@ export default function Analytics() {
               </Pie>
               <Tooltip />
             </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* UTILIZATION */}
+        <div className="bg-white p-5 rounded-xl shadow">
+          <h3 className="font-semibold mb-4">
+            Equipment Utilization (Days Used)
+          </h3>
+
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={utilization}>
+              <XAxis dataKey="equipment" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="daysUsed" fill="#4f46e5" />
+            </BarChart>
           </ResponsiveContainer>
         </div>
 

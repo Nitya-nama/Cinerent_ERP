@@ -31,6 +31,27 @@ export default function Bookings() {
     loadBookings();
   };
 
+  const approveBooking = async (id) => {
+  try {
+      await api.post(`/bookings/${id}/approve`);
+      loadBookings();
+    } catch (err) {
+      alert("Failed to approve booking");
+      console.error(err);
+    }
+  };
+
+  const rejectBooking = async (id) => {
+    try {
+      await api.post(`/bookings/${id}/reject`);
+      loadBookings();
+    } catch (err) {
+      alert("Failed to reject booking");
+      console.error(err);
+    }
+  };
+
+
   const closeBooking = async (id) => {
     await api.post(`/bookings/${id}/close`);
     loadBookings();
@@ -69,6 +90,25 @@ export default function Bookings() {
                   </button>
                 )}
 
+              {role === "admin" && b.status === "PENDING_APPROVAL" && (
+              <>
+                <button
+                  onClick={() => approveBooking(b._id)}
+                  className="bg-green-600 text-white px-3 py-1 rounded"
+                >
+                  Approve
+                </button>
+
+                <button
+                  onClick={() => rejectBooking(b._id)}
+                  className="bg-red-600 text-white px-3 py-1 rounded"
+                >
+                  Reject
+                </button>
+              </>
+            )}
+
+              
               {(role === "staff" || role === "admin") &&
                 b.status === "PICKED_UP" && (
                   <button
