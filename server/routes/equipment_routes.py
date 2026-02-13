@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from config.db import mongo
 from middleware.auth_middleware import require_auth
 from bson import ObjectId
+from flask_cors import cross_origin
 
 equipment_bp = Blueprint("equipment", __name__)
 

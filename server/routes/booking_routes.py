@@ -101,6 +101,17 @@ def return_booking(id):
     )
     return {"msg": "Equipment returned"}
 
+# VIEW single booking (invoice)
+@booking_bp.get("/<id>")
+@require_auth()
+def get_booking(id):
+    booking = mongo.db.bookings.find_one({"_id": ObjectId(id)})
+    if not booking:
+        return {"error": "Not found"}, 404
+
+    booking["_id"] = str(booking["_id"])
+    return booking
+
 # ADMIN — close booking & record revenue
 @booking_bp.post("/<id>/close")
 @require_auth("admin")

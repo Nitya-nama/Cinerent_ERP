@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  @apply bg-bg text-primary font-sans;
+}
+
+.container-luxury {
+  @apply max-w-[1200px] mx-auto px-12;
+}
+
+.hero-title {
+  font-size: clamp(64px, 10vw, 150px);
+  letter-spacing: -0.06em;
+  line-height: 0.9;
+  font-weight: 500;
+}
+
+.nav-link {
+  @apply text-[11px] tracking-[0.25em] text-secondary hover:text-primary transition;
+}
+
+.section-title {
+  @apply text-2xl font-medium tracking-wide;
+}
+
+.section-sub {
+  @apply text-sm text-muted mt-2;
+}
+
+/* ===== CINERENT LUXURY THEME ===== */
+
+.page {
+  @apply bg-bg min-h-screen text-primary;
+}
+
+.card {
+  @apply bg-surface border border-line rounded-2xl p-6;
+}
+
+.input {
+  @apply w-full bg-transparent border border-line rounded-full px-5 py-3 outline-none focus:border-primary transition;
+}
+
+.btn-primary {
+  @apply border border-primary rounded-full px-6 py-3 hover:bg-primary hover:text-white transition;
+}
+
+.btn-ghost {
+  @apply border border-line rounded-full px-6 py-3 hover:border-primary transition;
+}
+
+.title {
+  @apply text-3xl font-medium tracking-tight;
+}
+
+.subtitle {
+  @apply text-secondary text-sm;
+}
