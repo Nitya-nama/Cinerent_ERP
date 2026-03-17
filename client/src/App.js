@@ -5,7 +5,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Unauthorized from "./pages/Unauthorized";
 
-import DashboardRouter from "./pages/DashboardRouter"; // admin + customer
+import DashboardRouter from "./pages/DashboardRouter";
 import Equipment from "./pages/Equipment";
 import Analytics from "./pages/Analytics";
 
@@ -19,6 +19,8 @@ import AdminUsers from "./pages/AdminUsers";
 import StaffDashboard from "./pages/StaffDashboard";
 import StaffBookings from "./pages/StaffBookings";
 
+import Projects from "./pages/Projects";
+
 import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
@@ -31,9 +33,8 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/unauthorized" element={<Unauthorized />} />
-        <Route path="/projects/:projectId/book" element={<CreateBooking />} />
 
-        {/* ADMIN */}
+        {/* ADMIN ONLY */}
         <Route element={<ProtectedRoute allow={["admin"]} />}>
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<DashboardRouter />} />
@@ -41,10 +42,12 @@ export default function App() {
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/create-user" element={<AdminCreateUser />} />
+            <Route path="/manage-bookings" element={<Bookings />} />
+            <Route path="/invoice/:bookingId" element={<Invoice />} />
           </Route>
         </Route>
 
-        {/* STAFF */}
+        {/* STAFF ONLY */}
         <Route element={<ProtectedRoute allow={["staff"]} />}>
           <Route element={<MainLayout />}>
             <Route path="/staff/dashboard" element={<StaffDashboard />} />
@@ -52,17 +55,13 @@ export default function App() {
           </Route>
         </Route>
 
-        {/* CUSTOMER */}
+        {/* CUSTOMER ONLY */}
         <Route element={<ProtectedRoute allow={["customer"]} />}>
           <Route element={<MainLayout />}>
-            <Route path="/dashboard" element={<DashboardRouter />} />
+            <Route path="/customer-dashboard" element={<DashboardRouter />} />
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/projects/:projectId/book" element={<CreateBooking />} />
             <Route path="/bookings" element={<Bookings />} />
-          </Route>
-        </Route>
-
-        {/* INVOICE (ADMIN + CUSTOMER) */}
-        <Route element={<ProtectedRoute allow={["admin", "customer"]} />}>
-          <Route element={<MainLayout />}>
             <Route path="/invoice/:bookingId" element={<Invoice />} />
           </Route>
         </Route>

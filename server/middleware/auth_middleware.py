@@ -6,7 +6,6 @@ import os
 SECRET = os.getenv("JWT_SECRET", "devsecret")
 
 def require_auth(role=None):
-
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
@@ -20,15 +19,16 @@ def require_auth(role=None):
                 token = auth_header.split(" ")[1]
                 decoded = jwt.decode(token, SECRET, algorithms=["HS256"])
 
-                # attach user to request
                 request.user = {
                     "id": decoded["id"],
                     "role": decoded["role"]
                 }
 
-                # role check
-                if role and decoded["role"] != role:
-                    return jsonify({"error": "Forbidden"}), 403
+                # ✅ role can be a list or single string
+                if role:
+                    allowed = role if isinstance(role, list) else [role]
+                    if decoded["role"] not in allowed:
+                        return jsonify({"error": "Forbidden"}), 403
 
             except jwt.ExpiredSignatureError:
                 return jsonify({"error": "Token expired"}), 401

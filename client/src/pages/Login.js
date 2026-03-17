@@ -13,15 +13,16 @@ export default function Login() {
     try {
       const res = await api.post("/auth/login", { email, password });
 
-      console.log("LOGIN RESPONSE:", res.data);
-
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("role", res.data.role);
-      localStorage.setItem("name", res.data.name);
+      localStorage.setItem("user", JSON.stringify({
+        name: res.data.name,
+        role: res.data.role
+      }));
 
       if (res.data.role === "admin") navigate("/dashboard", { replace: true });
       else if (res.data.role === "staff") navigate("/staff/dashboard", { replace: true });
-      else navigate("/projects", { replace: true });
+      else navigate("/customer-dashboard", { replace: true });
 
     } catch (err) {
       console.log("LOGIN ERROR:", err.response?.data || err.message);
@@ -57,7 +58,7 @@ export default function Login() {
         </button>
 
         <p className="text-sm text-center mt-4">
-          Don’t have an account?{" "}
+          Don't have an account?{" "}
           <span onClick={() => navigate("/register")} className="text-indigo-600 cursor-pointer">
             Create account
           </span>

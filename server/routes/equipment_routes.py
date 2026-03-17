@@ -10,10 +10,8 @@ equipment_bp = Blueprint("equipment", __name__)
 @equipment_bp.get("")
 def get_equipment():
     items = list(mongo.db.equipment.find())
-
     for i in items:
         i["_id"] = str(i["_id"])
-
     return jsonify(items)
 
 
@@ -22,7 +20,6 @@ def get_equipment():
 @require_auth("admin")
 def add_equipment():
     data = request.json
-
     equipment = {
         "name": data["name"],
         "category": data["category"],
@@ -33,9 +30,7 @@ def add_equipment():
         "specifications": data.get("specifications", ""),
         "imageUrl": data.get("imageUrl", "")
     }
-
     mongo.db.equipment.insert_one(equipment)
-
     return {"msg": "Equipment added"}, 201
 
 
@@ -47,5 +42,16 @@ def update_equipment(id):
         {"_id": ObjectId(id)},
         {"$set": request.json}
     )
-
     return {"msg": "Equipment updated"}
+
+
+# ✅ ADMIN — delete equipment
+@equipment_bp.delete("/<id>")
+@require_auth("admin")
+def delete_equipment(id):
+    result = mongo.db.equipment.delete_one({"_id": ObjectId(id)})
+
+    if result.deleted_count == 0:
+        return {"error": "Equipment not found"}, 404
+
+    return {"msg": "Equipment deleted"}, 200
