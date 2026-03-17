@@ -39,7 +39,10 @@ export default function Sidebar() {
       {/* ---------- STAFF ---------- */}
       {role === "staff" && (
         <nav className="space-y-2">
-          <NavLink to="/manage-bookings" className={linkClass}>
+          <NavLink to="/staff/dashboard" className={linkClass}>
+            Staff Dashboard
+          </NavLink>
+          <NavLink to="/staff/bookings" className={linkClass}>
             Bookings
           </NavLink>
         </nav>

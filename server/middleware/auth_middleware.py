@@ -1,27 +1,42 @@
 from functools import wraps
 from flask import request, jsonify
-from config.jwt_handler import decode_token
+import jwt
+import os
+
+SECRET = os.getenv("JWT_SECRET", "devsecret")
 
 def require_auth(role=None):
-    def wrapper(fn):
+
+    def decorator(fn):
         @wraps(fn)
-        def decorated(*args, **kwargs):
+        def wrapper(*args, **kwargs):
+
             auth_header = request.headers.get("Authorization")
 
             if not auth_header:
                 return jsonify({"error": "Missing token"}), 401
 
             try:
-                token = auth_header.split()[1]
-                user = decode_token(token)
-            except:
-                return jsonify({"error": "Invalid or expired token"}), 401
+                token = auth_header.split(" ")[1]
+                decoded = jwt.decode(token, SECRET, algorithms=["HS256"])
 
-            # role check
-            if role and user["role"] != role:
-                return jsonify({"error": "Forbidden"}), 403
+                # attach user to request
+                request.user = {
+                    "id": decoded["id"],
+                    "role": decoded["role"]
+                }
 
-            request.user = user
+                # role check
+                if role and decoded["role"] != role:
+                    return jsonify({"error": "Forbidden"}), 403
+
+            except jwt.ExpiredSignatureError:
+                return jsonify({"error": "Token expired"}), 401
+            except Exception as e:
+                print("JWT ERROR:", e)
+                return jsonify({"error": "Invalid token"}), 401
+
             return fn(*args, **kwargs)
-        return decorated
-    return wrapper
+
+        return wrapper
+    return decorator

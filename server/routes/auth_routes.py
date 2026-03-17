@@ -10,28 +10,43 @@ auth_bp = Blueprint("auth", __name__)
 @auth_bp.get("/admin/users")
 @require_auth("admin")
 def list_users():
-    users = mongo.db.users.find({}, {"password": 0})
-    return jsonify(list(users)), 200
+    users = []
+    for u in mongo.db.users.find({}, {"password": 0}):
+        u["_id"] = str(u["_id"])
+        users.append(u)
+    return jsonify(users), 200
+
+@auth_bp.get("/admin/staff")
+@require_auth("admin")
+def list_staff():
+    staff = []
+    for u in mongo.db.users.find(
+        {"role": "staff", "active": True},
+        {"password": 0}
+    ):
+        u["_id"] = str(u["_id"])
+        staff.append(u)
+
+    return jsonify(staff), 200
+
 
 # REGISTER (PUBLIC)
 @auth_bp.post("/register")
 def register():
-    data = request.json
-
+    data = request.json or {}
+    if not data.get("email") or not data.get("password") or not data.get("name"):
+        return {"error": "Missing fields"}, 400
     if mongo.db.users.find_one({"email": data["email"]}):
-        return jsonify({"error": "Email already exists"}), 400
-
-    hashed = bcrypt.hashpw(data["password"].encode(), bcrypt.gensalt())
-
-    user = {
+        return {"error": "Email already exists"}, 400
+    hashed = bcrypt.hashpw(data["password"].encode("utf-8"), bcrypt.gensalt())
+    mongo.db.users.insert_one({
         "name": data["name"],
         "email": data["email"],
         "password": hashed,
-        "role": "customer"   # 🔒 FORCE CUSTOMER
-    }
-
-    mongo.db.users.insert_one(user)
-    return jsonify({"msg": "User created"}), 201
+        "role": "customer",
+        "active": True
+    })
+    return {"msg": "User created"}, 201
 
 @auth_bp.post("/admin/create-user")
 @require_auth("admin")
@@ -89,16 +104,26 @@ def update_role(user_id):
 # LOGIN
 @auth_bp.post("/login")
 def login():
-    data = request.json
-    user = mongo.db.users.find_one({"email": data["email"]})
-
-    if not user or not bcrypt.checkpw(data["password"].encode(), user["password"]):
-        return jsonify({"error": "Invalid credentials"}), 401
-
+    data = request.json or {}
+    email = data.get("email")
+    password = data.get("password")
+    if not email or not password:
+        return {"error": "Missing credentials"}, 400
+    user = mongo.db.users.find_one({"email": email})
+    if not user:
+        return {"error": "Invalid credentials"}, 401
+    stored_password = user.get("password")
+    if isinstance(stored_password, str):
+        stored_password = stored_password.encode("utf-8")
+    if not isinstance(stored_password, (bytes, bytearray)):
+        return {"error": "Corrupted password. Recreate user"}, 500
+    if not bcrypt.checkpw(password.encode("utf-8"), stored_password):
+        return {"error": "Invalid credentials"}, 401
+    if not user.get("active", True):
+        return {"error": "Account disabled"}, 403
     token = create_token(user)
-
-    return jsonify({
+    return {
         "token": token,
         "role": user["role"],
         "name": user["name"]
-    })
+    }, 200

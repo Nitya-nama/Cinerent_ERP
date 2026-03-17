@@ -1,16 +1,13 @@
-import jwt, datetime, os
-from dotenv import load_dotenv
+import jwt
+import os
+from datetime import datetime, timedelta
 
-load_dotenv()
-SECRET = os.getenv("JWT_SECRET")
+SECRET = os.getenv("JWT_SECRET", "devsecret")
 
 def create_token(user):
     payload = {
         "id": str(user["_id"]),
         "role": user["role"],
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=12)
+        "exp": datetime.utcnow() + timedelta(hours=10)
     }
     return jwt.encode(payload, SECRET, algorithm="HS256")
-
-def decode_token(token):
-    return jwt.decode(token, SECRET, algorithms=["HS256"])

@@ -11,24 +11,16 @@ export default function Login() {
     e.preventDefault();
 
     try {
-      const res = await api.post("/auth/login", {
-        email,
-        password,
-      });
+      const res = await api.post("/auth/login", { email, password });
+
       console.log("LOGIN RESPONSE:", res.data);
 
-      const token = res.data.token || res.data.access_token;
-      if (!token) throw new Error("Token missing");
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("role", res.data.role);
+      localStorage.setItem("name", res.data.name);
 
-      localStorage.setItem("token", token);
-
-      // decode role from JWT
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      localStorage.setItem("role", payload.role);
-
-      // role-based redirect
-      if (payload.role === "admin") navigate("/dashboard", { replace: true });
-      else if (payload.role === "staff") navigate("/bookings", { replace: true });
+      if (res.data.role === "admin") navigate("/dashboard", { replace: true });
+      else if (res.data.role === "staff") navigate("/staff/dashboard", { replace: true });
       else navigate("/projects", { replace: true });
 
     } catch (err) {
@@ -39,13 +31,8 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f6f3ee]">
-      <form
-        onSubmit={handleLogin}
-        className="bg-white p-8 rounded-xl w-[360px] shadow-xl"
-      >
-        <h1 className="text-2xl font-semibold mb-6 text-zinc-900">
-          CineRent
-        </h1>
+      <form onSubmit={handleLogin} className="bg-white p-8 rounded-xl w-[360px] shadow-xl">
+        <h1 className="text-2xl font-semibold mb-6 text-zinc-900">CineRent</h1>
 
         <input
           type="email"
@@ -65,23 +52,16 @@ export default function Login() {
           required
         />
 
-        <button
-          type="submit"
-          className="w-full py-3 bg-black text-white rounded-lg hover:opacity-90"
-        >
+        <button className="w-full py-3 bg-black text-white rounded-lg hover:opacity-90">
           Login
         </button>
 
         <p className="text-sm text-center mt-4">
           Don’t have an account?{" "}
-          <span
-            onClick={() => navigate("/register")}
-            className="text-indigo-600 cursor-pointer"
->
+          <span onClick={() => navigate("/register")} className="text-indigo-600 cursor-pointer">
             Create account
           </span>
         </p>
-
       </form>
     </div>
   );
