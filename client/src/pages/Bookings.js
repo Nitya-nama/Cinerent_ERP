@@ -4,7 +4,6 @@ import { api } from "../api/api";
 export default function Bookings() {
   const [bookings, setBookings] = useState([]);
   const [equipment, setEquipment] = useState([]);
-  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const role = localStorage.getItem("role");
 
