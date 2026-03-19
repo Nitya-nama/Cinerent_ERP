@@ -19,7 +19,11 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 app = Flask(__name__)
 CORS(
     app,
-    resources={r"/*": {"origins": "*"}},
+    resources={r"/*": {"origins": [
+        "http://localhost:3000",
+        "https://cinerent.vercel.app",   # your actual Vercel URL
+        "https://*.vercel.app"            # covers preview deployments
+    ]}},
     supports_credentials=True
 )
 
