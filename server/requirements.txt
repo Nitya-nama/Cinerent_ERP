@@ -7,3 +7,4 @@ PyJWT
 gunicorn
 pandas
 openpyxl
+bcrypt
