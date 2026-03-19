@@ -17,15 +17,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
-CORS(
-    app,
-    resources={r"/*": {"origins": [
-        "http://localhost:3000",
-        "https://cinerent.vercel.app",   # your actual Vercel URL
-        "https://*.vercel.app"            # covers preview deployments
-    ]}},
-    supports_credentials=True
-)
+CORS(app, origins="*" , supports_credentials=True)
+
 
 # MongoDB
 app.config["MONGO_URI"] = os.getenv("MONGO_URI")
