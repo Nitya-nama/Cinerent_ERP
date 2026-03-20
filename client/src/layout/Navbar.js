@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/api";
 
@@ -10,12 +10,12 @@ import { api } from "../api/api";
 function useNotifications(role) {
   const [notifications, setNotifications] = useState([]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
 
       if (role === "admin") {
-        const [br] = await Promise.all([api.get("/bookings")]);
+        const br       = await api.get("/bookings");
         const bookings = br.data || [];
 
         const notifs = [];
@@ -64,7 +64,7 @@ function useNotifications(role) {
         setNotifications(notifs);
 
       } else if (role === "staff") {
-        const [br, er] = await Promise.all([api.get("/bookings"), api.get("/equipment")]);
+        const br       = await api.get("/bookings");
         const bookings  = br.data || [];
         const notifs    = [];
 
@@ -155,7 +155,7 @@ function useNotifications(role) {
     } catch (err) {
       // Fail silently — notifications are non-critical
     }
-  };
+  }, [role]);
 
   useEffect(() => {
     if (role) {
@@ -164,7 +164,7 @@ function useNotifications(role) {
       const interval = setInterval(load, 2 * 60 * 1000);
       return () => clearInterval(interval);
     }
-  }, [role]);
+  }, [role, load]);
 
   return notifications;
 }
