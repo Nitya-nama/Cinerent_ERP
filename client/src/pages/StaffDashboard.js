@@ -1,411 +1,212 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/api";
 
-export default function StaffDashboard() {
-  const [bookings, setBookings] = useState([]);
-  const [equipment, setEquipment] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().slice(0, 10)
-  );
-  const [activeTab, setActiveTab] = useState("pickups");
+const normalizeDate = d => { try { return new Date(d).toISOString().slice(0, 10); } catch { return String(d).slice(0, 10); } };
 
-const load = async () => {
-    try {
-      setLoading(true);
-      const [bookingsRes, equipmentRes] = await Promise.all([
-        api.get("/bookings"),
-        api.get("/equipment")
-      ]);
-
-      // ✅ ADD THESE LOGS
-      console.log("TOTAL BOOKINGS RECEIVED:", bookingsRes.data.length);
-      console.log("BOOKINGS:", bookingsRes.data);
-      
-      setBookings(bookingsRes.data || []);
-      setEquipment(equipmentRes.data || []);
-    } catch (err) {
-      console.error("Staff dashboard error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  const pickup = async (id) => {
-    try {
-      await api.post(`/bookings/${id}/pickup`);
-      alert("Marked as Picked Up!");
-      load();
-    } catch (err) {
-      alert("Failed to mark picked up");
-    }
-  };
-
-  const returned = async (id) => {
-    try {
-      await api.post(`/bookings/${id}/return`);
-      alert("Marked as Returned!");
-      load();
-    } catch (err) {
-      alert("Failed to mark returned");
-    }
-  };
-  
-  
-
-  const getEquipmentNames = (ids) => {
-    if (!ids || ids.length === 0) return "No equipment";
-    return ids
-      .map((id) => {
-        const eq = equipment.find((e) => e._id === id);
-        return eq ? eq.name : id;
-      })
-      .join(", ");
-  };
-
-  const getDays = (start, end) => {
-    if (!start || !end) return 0;
-    const diff =
-      (new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24) + 1;
-    return diff > 0 ? diff : 0;
-  };
-
-  const getTotal = (ids, start, end) => {
-    if (!ids || ids.length === 0) return 0;
-    const days = getDays(start, end);
-    return ids.reduce((sum, id) => {
-      const eq = equipment.find((e) => e._id === id);
-      return sum + (eq ? eq.dailyRate * days : 0);
-    }, 0);
-  };
-
-// ✅ Normalize date to YYYY-MM-DD regardless of format
-  const normalizeDate = (dateStr) => {
-    if (!dateStr) return "";
-    try {
-      return new Date(dateStr).toISOString().slice(0, 10);
-    } catch {
-      return String(dateStr).slice(0, 10);
-    }
-  };
-
-  // ✅ Filter by selected date using normalized comparison
-  const pickupsForDate = bookings.filter((b) => {
-    const bookingStart = normalizeDate(b.startDate);
-    return bookingStart === selectedDate && b.status === "APPROVED";
-  });
-
-  const returnsForDate = bookings.filter((b) => {
-    const bookingEnd = normalizeDate(b.endDate);
-    return bookingEnd === selectedDate && b.status === "PICKED_UP";
-  });
-
-  const overduePickups = bookings.filter((b) => {
-    const bookingStart = normalizeDate(b.startDate);
-    return b.status === "APPROVED" && bookingStart < selectedDate;
-  });
-
-  const overdueReturns = bookings.filter((b) => {
-    const bookingEnd = normalizeDate(b.endDate);
-    return b.status === "PICKED_UP" && bookingEnd < selectedDate;
-  });
-
-  if (loading) return <div className="p-6">Loading...</div>;
-
+function BookingCard({ booking: b, getEquipmentNames, getDays, getTotal, badge, badgeStyle, actionLabel, actionStyle, onAction }) {
   return (
-    <div className="p-6">
-      <h2 className="text-3xl font-bold mb-6">Staff Dashboard</h2>
-
-      {/* DATE PICKER */}
-      <div className="bg-white p-5 rounded-xl shadow mb-6 flex items-center gap-6">
-        <div>
-          <label className="text-sm text-gray-500 block mb-1">
-            Select Date
-          </label>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-4 py-2 text-base focus:outline-none focus:border-black"
-          />
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ height: 3, background: actionStyle?.background || "var(--teal)" }} />
+      <div style={{ padding: "18px 20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <span style={{ ...badgeStyle, padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 500 }}>{badge}</span>
+          <span style={{ fontSize: 18, fontWeight: 700, color: "var(--teal)" }}>
+            ₹{getTotal(b.equipmentIds, b.startDate, b.endDate).toLocaleString("en-IN")}
+          </span>
         </div>
 
-        <div className="flex gap-3 mt-4">
-          <button
-            onClick={() =>
-              setSelectedDate(new Date().toISOString().slice(0, 10))
-            }
-            className="px-4 py-2 bg-black text-white rounded-lg text-sm"
-          >
-            Today
-          </button>
-          <button
-            onClick={() => {
-              const d = new Date(selectedDate);
-              d.setDate(d.getDate() - 1);
-              setSelectedDate(d.toISOString().slice(0, 10));
-            }}
-            className="px-4 py-2 border rounded-lg text-sm"
-          >
-            ← Prev
-          </button>
-          <button
-            onClick={() => {
-              const d = new Date(selectedDate);
-              d.setDate(d.getDate() + 1);
-              setSelectedDate(d.toISOString().slice(0, 10));
-            }}
-            className="px-4 py-2 border rounded-lg text-sm"
-          >
-            Next →
-          </button>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+          {b.startDate} <span style={{ color: "var(--muted)" }}>→</span> {b.endDate}
+          <span style={{ color: "var(--muted)", fontWeight: 400, marginLeft: 8 }}>({getDays(b.startDate, b.endDate)}d)</span>
         </div>
 
-        {/* QUICK STATS FOR SELECTED DATE */}
-        <div className="ml-auto flex gap-4">
-          <div className="text-center px-4 py-2 bg-yellow-50 rounded-lg border border-yellow-200">
-            <p className="text-xs text-gray-500">Pickups</p>
-            <p className="text-2xl font-bold text-yellow-600">
-              {pickupsForDate.length}
-            </p>
-          </div>
-          <div className="text-center px-4 py-2 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-xs text-gray-500">Returns</p>
-            <p className="text-2xl font-bold text-blue-600">
-              {returnsForDate.length}
-            </p>
-          </div>
-          <div className="text-center px-4 py-2 bg-red-50 rounded-lg border border-red-200">
-            <p className="text-xs text-gray-500">Overdue</p>
-            <p className="text-2xl font-bold text-red-600">
-              {overduePickups.length + overdueReturns.length}
-            </p>
-          </div>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 14, background: "var(--bg)", padding: "8px 12px", borderRadius: 8 }}>
+          {getEquipmentNames(b.equipmentIds)}
         </div>
+
+        <button
+          onClick={onAction}
+          style={{ width: "100%", ...actionStyle, border: "none", borderRadius: 10, padding: "10px", fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+        >
+          {actionLabel}
+        </button>
       </div>
-
-      {/* TABS */}
-      <div className="flex gap-2 mb-6">
-        {[
-          { key: "pickups", label: `Pickups (${pickupsForDate.length})` },
-          { key: "returns", label: `Returns (${returnsForDate.length})` },
-          {
-            key: "overdue",
-            label: `Overdue (${overduePickups.length + overdueReturns.length})`,
-          },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-5 py-2 rounded-full text-sm font-medium border transition ${
-              activeTab === tab.key
-                ? "bg-black text-white border-black"
-                : "bg-white text-gray-600 border-gray-300 hover:border-black"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* PICKUPS TAB */}
-      {activeTab === "pickups" && (
-        <div>
-          <h3 className="text-lg font-semibold mb-4">
-            Pickups for {selectedDate}
-          </h3>
-
-          {pickupsForDate.length === 0 && (
-            <div className="bg-white p-8 rounded-xl shadow text-center text-gray-400">
-              No pickups scheduled for this date.
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            {pickupsForDate.map((b) => (
-              <BookingCard
-                key={b._id}
-                booking={b}
-                equipment={equipment}
-                getEquipmentNames={getEquipmentNames}
-                getDays={getDays}
-                getTotal={getTotal}
-                badgeColor="bg-blue-100 text-blue-700"
-                badgeLabel="APPROVED — Ready for Pickup"
-                actionLabel="📦 Mark Picked Up"
-                actionColor="bg-yellow-500 hover:bg-yellow-600"
-                onAction={() => pickup(b._id)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* RETURNS TAB */}
-      {activeTab === "returns" && (
-        <div>
-          <h3 className="text-lg font-semibold mb-4">
-            Returns for {selectedDate}
-          </h3>
-
-          {returnsForDate.length === 0 && (
-            <div className="bg-white p-8 rounded-xl shadow text-center text-gray-400">
-              No returns scheduled for this date.
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            {returnsForDate.map((b) => (
-              <BookingCard
-                key={b._id}
-                booking={b}
-                equipment={equipment}
-                getEquipmentNames={getEquipmentNames}
-                getDays={getDays}
-                getTotal={getTotal}
-                badgeColor="bg-orange-100 text-orange-700"
-                badgeLabel="PICKED UP — Due for Return"
-                actionLabel="🔄 Mark Returned"
-                actionColor="bg-blue-600 hover:bg-blue-700"
-                onAction={() => returned(b._id)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* OVERDUE TAB */}
-      {activeTab === "overdue" && (
-        <div>
-          <h3 className="text-lg font-semibold mb-4">
-            Overdue Bookings
-          </h3>
-
-          {overduePickups.length === 0 && overdueReturns.length === 0 && (
-            <div className="bg-white p-8 rounded-xl shadow text-center text-gray-400">
-              No overdue bookings. 
-            </div>
-          )}
-
-          {/* OVERDUE PICKUPS */}
-          {overduePickups.length > 0 && (
-            <div className="mb-6">
-              <h4 className="text-sm font-semibold text-red-600 mb-3 uppercase tracking-wide">
-                ⚠️ Overdue Pickups ({overduePickups.length})
-              </h4>
-              <div className="grid grid-cols-2 gap-4">
-                {overduePickups.map((b) => (
-                  <BookingCard
-                    key={b._id}
-                    booking={b}
-                    equipment={equipment}
-                    getEquipmentNames={getEquipmentNames}
-                    getDays={getDays}
-                    getTotal={getTotal}
-                    badgeColor="bg-red-100 text-red-700"
-                    badgeLabel={`OVERDUE PICKUP — was ${b.startDate}`}
-                    actionLabel="📦 Mark Picked Up"
-                    actionColor="bg-yellow-500 hover:bg-yellow-600"
-                    onAction={() => pickup(b._id)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* OVERDUE RETURNS */}
-          {overdueReturns.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold text-red-600 mb-3 uppercase tracking-wide">
-                ⚠️ Overdue Returns ({overdueReturns.length})
-              </h4>
-              <div className="grid grid-cols-2 gap-4">
-                {overdueReturns.map((b) => (
-                  <BookingCard
-                    key={b._id}
-                    booking={b}
-                    equipment={equipment}
-                    getEquipmentNames={getEquipmentNames}
-                    getDays={getDays}
-                    getTotal={getTotal}
-                    badgeColor="bg-red-100 text-red-700"
-                    badgeLabel={`OVERDUE RETURN — was due ${b.endDate}`}
-                    actionLabel="🔄 Mark Returned"
-                    actionColor="bg-blue-600 hover:bg-blue-700"
-                    onAction={() => returned(b._id)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
-/* ---------- BOOKING CARD ---------- */
-function BookingCard({
-  booking: b,
-  getEquipmentNames,
-  getDays,
-  getTotal,
-  badgeColor,
-  badgeLabel,
-  actionLabel,
-  actionColor,
-  onAction,
-}) {
+export default function StaffDashboard() {
+  const [bookings, setBookings]   = useState([]);
+  const [equipment, setEquipment] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [activeTab, setActiveTab] = useState("pickups");
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [br, er] = await Promise.all([api.get("/bookings"), api.get("/equipment")]);
+      setBookings(br.data || []); setEquipment(er.data || []);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const getEquipmentNames = ids => {
+    if (!ids?.length) return "No equipment";
+    return ids.map(id => { const eq = equipment.find(e => e._id === id); return eq ? eq.name : id; }).join(", ");
+  };
+  const getDays  = (s, e) => { if (!s || !e) return 0; const d = (new Date(e) - new Date(s)) / 86400000 + 1; return d > 0 ? d : 0; };
+  const getTotal = (ids, s, e) => { if (!ids?.length) return 0; const d = getDays(s, e); return ids.reduce((sum, id) => { const eq = equipment.find(q => q._id === id); return sum + (eq ? eq.dailyRate * d : 0); }, 0); };
+
+  const pickupsForDate  = bookings.filter(b => normalizeDate(b.startDate) === selectedDate && b.status === "APPROVED");
+  const returnsForDate  = bookings.filter(b => normalizeDate(b.endDate)   === selectedDate && b.status === "PICKED_UP");
+  const overduePickups  = bookings.filter(b => b.status === "APPROVED"   && normalizeDate(b.startDate) < selectedDate);
+  const overdueReturns  = bookings.filter(b => b.status === "PICKED_UP"  && normalizeDate(b.endDate)   < selectedDate);
+
+  const pickup   = async id => { try { await api.post(`/bookings/${id}/pickup`);  load(); } catch { alert("Failed"); } };
+  const returned = async id => { try { await api.post(`/bookings/${id}/return`);  load(); } catch { alert("Failed"); } };
+
+  const tabs = [
+    { key: "pickups",  label: "Pickups",  count: pickupsForDate.length },
+    { key: "returns",  label: "Returns",  count: returnsForDate.length },
+    { key: "overdue",  label: "Overdue",  count: overduePickups.length + overdueReturns.length },
+  ];
+
+  if (loading) return <div style={{ padding: 32, color: "var(--muted)", fontSize: 14 }}>Loading…</div>;
+
   return (
-    <div className="bg-white p-5 rounded-xl shadow">
+    <div>
+      <div className="page-header">
+        <h1 className="page-title">Staff Dashboard</h1>
+        <p className="page-subtitle">Daily pickup & return tracker</p>
+      </div>
 
-      {/* BADGE */}
-      <span className={`inline-block px-3 py-1 text-xs rounded-full font-medium mb-3 ${badgeColor}`}>
-        {badgeLabel}
-      </span>
-
-      {/* ID */}
-      <p className="text-xs text-gray-400 mb-2">
-        Booking ID: {b._id}
-      </p>
-
-      {/* DATES */}
-      <div className="flex justify-between items-center mb-3">
-        <div>
-          <p className="font-semibold text-gray-800">
-            {b.startDate} → {b.endDate}
-          </p>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {getDays(b.startDate, b.endDate)} days
-          </p>
+      {/* DATE BAR */}
+      <div className="card" style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 24, flexWrap: "wrap" }}>
+        <div className="input-group" style={{ margin: 0 }}>
+          <label className="input-label">Selected Date</label>
+          <input type="date" className="input" style={{ width: 180 }} value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
         </div>
-        <div className="text-right">
-          <p className="text-green-600 font-bold">
-            ₹ {getTotal(b.equipmentIds, b.startDate, b.endDate)}
-          </p>
-          <p className="text-xs text-gray-400">estimated</p>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+          <button className="btn btn-primary btn-sm" onClick={() => setSelectedDate(new Date().toISOString().slice(0, 10))}>Today</button>
+          <button className="btn btn-outline btn-sm" onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d.toISOString().slice(0, 10)); }}>← Prev</button>
+          <button className="btn btn-outline btn-sm" onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d.toISOString().slice(0, 10)); }}>Next →</button>
+        </div>
+
+        <div style={{ marginLeft: "auto", display: "flex", gap: 12 }}>
+          {[
+            { label: "Pickups",  val: pickupsForDate.length,  bg: "#fffbeb", color: "#d97706" },
+            { label: "Returns",  val: returnsForDate.length,  bg: "#eff6ff", color: "#2563eb" },
+            { label: "Overdue",  val: overduePickups.length + overdueReturns.length, bg: "#fef2f2", color: "#dc2626" },
+          ].map(s => (
+            <div key={s.label} style={{ textAlign: "center", padding: "10px 20px", background: s.bg, borderRadius: 12, minWidth: 80 }}>
+              <div style={{ fontSize: 10, color: "var(--muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>{s.label}</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: s.color, lineHeight: 1.2, marginTop: 2 }}>{s.val}</div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* EQUIPMENT */}
-      <div className="bg-gray-50 rounded-lg p-3 mb-4">
-        <p className="text-xs text-gray-500 mb-1 font-medium">Equipment</p>
-        <p className="text-sm text-gray-700">
-          {getEquipmentNames(b.equipmentIds)}
-        </p>
+      {/* TABS */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className="btn"
+            style={{
+              background: activeTab === t.key ? "var(--teal)" : "var(--surface)",
+              color: activeTab === t.key ? "#fff" : "var(--muted)",
+              border: `1.5px solid ${activeTab === t.key ? "var(--teal)" : "var(--line)"}`,
+              padding: "9px 18px"
+            }}
+          >
+            {t.label}
+            <span style={{
+              marginLeft: 6, background: activeTab === t.key ? "rgba(255,255,255,0.25)" : "var(--bg)",
+              padding: "2px 7px", borderRadius: 10, fontSize: 11
+            }}>
+              {t.count}
+            </span>
+          </button>
+        ))}
       </div>
 
-      {/* ACTION BUTTON */}
-      <button
-        onClick={onAction}
-        className={`w-full ${actionColor} text-white py-2.5 rounded-lg text-sm font-medium transition`}
-      >
-        {actionLabel}
-      </button>
+      {/* CONTENT */}
+      {activeTab === "pickups" && (
+        <>
+          {pickupsForDate.length === 0
+            ? <div className="card" style={{ textAlign: "center", padding: "48px", color: "var(--muted)" }}>No pickups scheduled for {selectedDate}.</div>
+            : <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16 }}>
+                {pickupsForDate.map(b => (
+                  <BookingCard key={b._id} booking={b} getEquipmentNames={getEquipmentNames} getDays={getDays} getTotal={getTotal}
+                    badge="Ready for Pickup" badgeStyle={{ background: "#dbeafe", color: "#1e40af" }}
+                    actionLabel="📦 Mark Picked Up" actionStyle={{ background: "#f59e0b", color: "#fff" }}
+                    onAction={() => pickup(b._id)} />
+                ))}
+              </div>
+          }
+        </>
+      )}
+
+      {activeTab === "returns" && (
+        <>
+          {returnsForDate.length === 0
+            ? <div className="card" style={{ textAlign: "center", padding: "48px", color: "var(--muted)" }}>No returns scheduled for {selectedDate}.</div>
+            : <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16 }}>
+                {returnsForDate.map(b => (
+                  <BookingCard key={b._id} booking={b} getEquipmentNames={getEquipmentNames} getDays={getDays} getTotal={getTotal}
+                    badge="Due for Return" badgeStyle={{ background: "#ffedd5", color: "#9a3412" }}
+                    actionLabel="🔄 Mark Returned" actionStyle={{ background: "#3b82f6", color: "#fff" }}
+                    onAction={() => returned(b._id)} />
+                ))}
+              </div>
+          }
+        </>
+      )}
+
+      {activeTab === "overdue" && (
+        <>
+          {overduePickups.length === 0 && overdueReturns.length === 0
+            ? <div className="card" style={{ textAlign: "center", padding: "48px", color: "var(--muted)" }}>No overdue bookings 🎉</div>
+            : <>
+                {overduePickups.length > 0 && (
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#dc2626", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
+                      ⚠️ Overdue Pickups ({overduePickups.length})
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16 }}>
+                      {overduePickups.map(b => (
+                        <BookingCard key={b._id} booking={b} getEquipmentNames={getEquipmentNames} getDays={getDays} getTotal={getTotal}
+                          badge={`Was due ${b.startDate}`} badgeStyle={{ background: "#fef2f2", color: "#dc2626" }}
+                          actionLabel="📦 Mark Picked Up" actionStyle={{ background: "#f59e0b", color: "#fff" }}
+                          onAction={() => pickup(b._id)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {overdueReturns.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#dc2626", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
+                      ⚠️ Overdue Returns ({overdueReturns.length})
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16 }}>
+                      {overdueReturns.map(b => (
+                        <BookingCard key={b._id} booking={b} getEquipmentNames={getEquipmentNames} getDays={getDays} getTotal={getTotal}
+                          badge={`Was due ${b.endDate}`} badgeStyle={{ background: "#fef2f2", color: "#dc2626" }}
+                          actionLabel="🔄 Mark Returned" actionStyle={{ background: "#3b82f6", color: "#fff" }}
+                          onAction={() => returned(b._id)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+          }
+        </>
+      )}
     </div>
   );
 }

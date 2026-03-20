@@ -1,141 +1,218 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/api";
-import { useReactToPrint } from "react-to-print";
 
 export default function Invoice() {
-  const { bookingId } = useParams();
-
-  const [booking, setBooking] = useState(null);
+  const { id } = useParams();
+  const [booking, setBooking]   = useState(null);
   const [equipment, setEquipment] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [days, setDays] = useState(0);
-
-  const printRef = useRef(null);
-
-  /* ---------- LOAD INVOICE ---------- */
-  const loadInvoice = useCallback(async () => {
-    try {
-      const res = await api.get(`/bookings/${bookingId}`);
-      const bookingData = res.data;
-      setBooking(bookingData);
-
-      const eqRes = await api.get("/equipment");
-      const used = eqRes.data.filter((e) =>
-        bookingData.equipmentIds?.includes(e._id)
-      );
-      setEquipment(used);
-
-      const d =
-        (new Date(bookingData.endDate) - new Date(bookingData.startDate)) /
-          (1000 * 60 * 60 * 24) + 1;
-      setDays(d);
-
-      let amount = 0;
-      used.forEach((e) => {
-        amount += e.dailyRate * d;
-      });
-      setTotal(amount);
-
-    } catch (err) {
-      console.error("Invoice load failed", err);
-    }
-  }, [bookingId]);
+  const [loading, setLoading]   = useState(true);
+  const printRef = useRef();
 
   useEffect(() => {
-    loadInvoice();
-  }, [loadInvoice]);
+    Promise.all([api.get(`/bookings/${id}`), api.get("/equipment")])
+      .then(([br, er]) => { setBooking(br.data); setEquipment(er.data || []); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [id]);
 
-  /* ---------- PRINT / PDF ---------- */
-  const handlePrint = useReactToPrint({
-    content: () => printRef.current,  // ✅ v2 API - works with react-to-print@3
-    documentTitle: booking ? `Invoice-${booking._id}` : "Invoice",
+  if (loading) return <div style={{ padding: 32, color: "var(--muted)", fontSize: 14 }}>Loading invoice…</div>;
+  if (!booking) return <div style={{ padding: 32, color: "var(--danger)" }}>Booking not found.</div>;
+
+  const getEq = eqId => equipment.find(e => e._id === eqId);
+  const getDays = () => {
+    if (!booking.startDate || !booking.endDate) return 0;
+    return Math.max(0, Math.round((new Date(booking.endDate) - new Date(booking.startDate)) / 86400000) + 1);
+  };
+  const days = getDays();
+
+  const lineItems = (booking.equipmentIds || []).map(eqId => {
+    const eq = getEq(eqId);
+    return { name: eq?.name || eqId, category: eq?.category || "", rate: eq?.dailyRate || 0, qty: days, total: (eq?.dailyRate || 0) * days };
   });
 
-  if (!booking) {
-    return <div className="p-6">Loading invoice...</div>;
-  }
+  const subtotal = lineItems.reduce((s, i) => s + i.total, 0);
+  const gst      = Math.round(subtotal * 0.18);
+  const grand    = subtotal + gst;
+  const invoiceNo = `INV-${booking._id.slice(-8).toUpperCase()}`;
+  const today     = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" });
+
+  const handlePrint = () => window.print();
 
   return (
-    <div className="p-6">
-
-      {/* ACTION BUTTON */}
-      <div className="flex gap-3 mb-4">
-        <button
-          onClick={handlePrint}
-          className="bg-indigo-600 text-white px-4 py-2 rounded"
-        >
-          Download / Print PDF
+    <div>
+      {/* PRINT CONTROLS — hidden when printing */}
+      <div className="no-print" style={{ display: "flex", gap: 12, marginBottom: 28 }}>
+        <button className="btn btn-primary" onClick={handlePrint}>
+          🖨️ Print / Save PDF
+        </button>
+        <button className="btn btn-outline" onClick={() => window.history.back()}>
+          ← Back to Bookings
         </button>
       </div>
 
-      {/* INVOICE CONTENT */}
-      <div
-        ref={printRef}
-        className="bg-white p-8 rounded-xl shadow max-w-3xl mx-auto"
-      >
+      {/* INVOICE DOCUMENT */}
+      <div ref={printRef} style={{
+        background: "#fff", borderRadius: 16, padding: "48px 52px",
+        maxWidth: 780, boxShadow: "0 4px 24px rgba(0,0,0,0.07)",
+        fontFamily: "'DM Sans', sans-serif",
+        color: "#111827"
+      }}>
         {/* HEADER */}
-        <div className="flex justify-between items-start mb-8">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 40 }}>
           <div>
-            <h1 className="text-3xl font-bold">CineRent</h1>
-            <p className="text-gray-500 text-sm mt-1">Professional Film Equipment Rental</p>
+            <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28, color: "#0d1b2a", marginBottom: 4 }}>
+              CineRent
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>Professional Film Equipment Rentals</div>
           </div>
-          <div className="text-right">
-            <h2 className="text-xl font-semibold">INVOICE</h2>
-            <p className="text-gray-500 text-sm mt-1">#{booking._id.slice(-8).toUpperCase()}</p>
+          <div style={{ textAlign: "right" }}>
+            <div style={{
+              display: "inline-block", background: "#e6f9f5", color: "#0d9a7e",
+              padding: "6px 18px", borderRadius: 20, fontSize: 13, fontWeight: 600, marginBottom: 8
+            }}>
+              INVOICE
+            </div>
+            <div style={{ fontSize: 13, color: "#6b7280" }}>{invoiceNo}</div>
+            <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>{today}</div>
           </div>
         </div>
 
-        {/* BOOKING DETAILS */}
-        <div className="grid grid-cols-2 gap-6 mb-8 bg-gray-50 p-4 rounded-lg">
-          <div>
-            <h3 className="font-semibold text-gray-700 mb-1">Rental Period</h3>
-            <p className="text-gray-600">{booking.startDate} → {booking.endDate}</p>
-            <p className="text-gray-500 text-sm mt-1">{days} day(s)</p>
-          </div>
+        {/* DIVIDER */}
+        <div style={{ height: 2, background: "#f3f4f6", marginBottom: 32 }} />
 
+        {/* BILLING INFO */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32, marginBottom: 36 }}>
           <div>
-            <h3 className="font-semibold text-gray-700 mb-1">Status</h3>
-            <span className="inline-block bg-green-100 text-green-700 px-3 py-1 rounded text-sm">
-              {booking.status}
-            </span>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
+              From
+            </div>
+            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>CineRent Studio</div>
+            <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>
+              Film Equipment Rentals<br />
+              Bengaluru, Karnataka 560001<br />
+              GST: 29AABCC1234M1Z5
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
+              Rental Details
+            </div>
+            <div style={{ fontSize: 13, color: "#374151", lineHeight: 2 }}>
+              <div style={{ display: "flex", gap: 16 }}>
+                <span style={{ color: "#9ca3af", minWidth: 80 }}>Booking</span>
+                <span>#{booking._id.slice(-8).toUpperCase()}</span>
+              </div>
+              <div style={{ display: "flex", gap: 16 }}>
+                <span style={{ color: "#9ca3af", minWidth: 80 }}>Pickup</span>
+                <span>{booking.startDate}</span>
+              </div>
+              <div style={{ display: "flex", gap: 16 }}>
+                <span style={{ color: "#9ca3af", minWidth: 80 }}>Return</span>
+                <span>{booking.endDate}</span>
+              </div>
+              <div style={{ display: "flex", gap: 16 }}>
+                <span style={{ color: "#9ca3af", minWidth: 80 }}>Duration</span>
+                <span>{days} day{days !== 1 ? "s" : ""}</span>
+              </div>
+              {booking.projectId && (
+                <div style={{ display: "flex", gap: 16 }}>
+                  <span style={{ color: "#9ca3af", minWidth: 80 }}>Project</span>
+                  <span>{booking.projectId}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* EQUIPMENT TABLE */}
-        <table className="w-full border mb-6">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border p-3 text-left">Equipment</th>
-              <th className="border p-3 text-center">Rate / Day</th>
-              <th className="border p-3 text-center">Days</th>
-              <th className="border p-3 text-right">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {equipment.map((eq) => (
-              <tr key={eq._id}>
-                <td className="border p-3">{eq.name}</td>
-                <td className="border p-3 text-center">₹ {eq.dailyRate}</td>
-                <td className="border p-3 text-center">{days}</td>
-                <td className="border p-3 text-right">₹ {eq.dailyRate * days}</td>
+        {/* LINE ITEMS */}
+        <div style={{ marginBottom: 32 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#f9fafb" }}>
+                {["Equipment", "Category", "Daily Rate", "Days", "Amount"].map(h => (
+                  <th key={h} style={{
+                    padding: "12px 16px", textAlign: h === "Equipment" || h === "Category" ? "left" : "right",
+                    fontSize: 11, fontWeight: 600, color: "#9ca3af",
+                    letterSpacing: "0.07em", textTransform: "uppercase",
+                    borderBottom: "1px solid #e5e7eb"
+                  }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {lineItems.map((item, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                  <td style={{ padding: "14px 16px", fontWeight: 500, fontSize: 13.5 }}>{item.name}</td>
+                  <td style={{ padding: "14px 16px", color: "#9ca3af", fontSize: 12.5 }}>{item.category}</td>
+                  <td style={{ padding: "14px 16px", textAlign: "right", fontSize: 13 }}>₹{item.rate.toLocaleString("en-IN")}</td>
+                  <td style={{ padding: "14px 16px", textAlign: "right", fontSize: 13 }}>{item.qty}</td>
+                  <td style={{ padding: "14px 16px", textAlign: "right", fontWeight: 600, fontSize: 13.5 }}>₹{item.total.toLocaleString("en-IN")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-        {/* TOTAL */}
-        <div className="text-right border-t pt-4">
-          <p className="text-gray-500 text-sm">Subtotal: ₹ {total}</p>
-          <p className="text-gray-500 text-sm">Tax (0%): ₹ 0</p>
-          <h2 className="text-2xl font-bold mt-2">Total: ₹ {total}</h2>
+        {/* TOTALS */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 36 }}>
+          <div style={{ minWidth: 280 }}>
+            {[
+              { label: "Subtotal", val: subtotal },
+              { label: "GST (18%)", val: gst },
+            ].map(row => (
+              <div key={row.label} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "8px 0", borderBottom: "1px solid #f3f4f6", fontSize: 13
+              }}>
+                <span style={{ color: "#6b7280" }}>{row.label}</span>
+                <span>₹{row.val.toLocaleString("en-IN")}</span>
+              </div>
+            ))}
+            <div style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "16px 0 0",
+            }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>Grand Total</span>
+              <span style={{ fontWeight: 800, fontSize: 24, color: "#1EC8A0" }}>
+                ₹{grand.toLocaleString("en-IN")}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* STATUS BANNER */}
+        <div style={{
+          borderRadius: 12, padding: "14px 20px",
+          background: booking.status === "CLOSED" ? "#f0fdf4" : "#fffbeb",
+          border: `1.5px solid ${booking.status === "CLOSED" ? "#bbf7d0" : "#fde68a"}`,
+          display: "flex", alignItems: "center", gap: 10, marginBottom: 32
+        }}>
+          <span style={{ fontSize: 20 }}>{booking.status === "CLOSED" ? "✅" : "⏳"}</span>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: booking.status === "CLOSED" ? "#166534" : "#d97706" }}>
+              {booking.status === "CLOSED" ? "Payment Confirmed" : "Payment Pending"}
+            </div>
+            <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 1 }}>
+              Status: {(booking.status || "").replace(/_/g, " ")}
+            </div>
+          </div>
         </div>
 
         {/* FOOTER */}
-        <p className="text-sm text-gray-400 mt-8 text-center border-t pt-4">
-          Thank you for choosing CineRent. For support contact: support@cinerent.com
-        </p>
+        <div style={{ borderTop: "2px solid #f3f4f6", paddingTop: 24, textAlign: "center" }}>
+          <div style={{ fontSize: 12, color: "#9ca3af" }}>
+            Thank you for choosing CineRent. For queries: rentals@cinerent.in · +91 98765 43210
+          </div>
+        </div>
       </div>
+
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white; }
+        }
+      `}</style>
     </div>
   );
 }

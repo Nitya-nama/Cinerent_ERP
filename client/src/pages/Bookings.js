@@ -1,232 +1,247 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/api";
 
+const STATUS_BADGE = {
+  PENDING_APPROVAL: "badge badge-pending",
+  APPROVED:         "badge badge-approved",
+  PICKED_UP:        "badge badge-pickup",
+  RETURNED:         "badge badge-returned",
+  CLOSED:           "badge badge-closed",
+  REJECTED:         "badge badge-rejected",
+};
+
+const STATUS_STRIPE = {
+  PENDING_APPROVAL: "#f59e0b",
+  APPROVED:         "#3b82f6",
+  PICKED_UP:        "#f97316",
+  RETURNED:         "#8b5cf6",
+  CLOSED:           "#10b981",
+  REJECTED:         "#ef4444",
+};
+
 export default function Bookings() {
-  const [bookings, setBookings] = useState([]);
+  const [bookings, setBookings]   = useState([]);
   const [equipment, setEquipment] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]     = useState(true);
+  const [filter, setFilter]       = useState("ALL");
   const role = localStorage.getItem("role");
 
-  const loadData = async () => {
+  const load = async () => {
     try {
       setLoading(true);
-
-      const [bookingsRes, equipmentRes] = await Promise.all([
-        api.get("/bookings"),
-        api.get("/equipment"),
-      ]);
-
-      setBookings(bookingsRes.data || []);
-      setEquipment(equipmentRes.data || []);
-
-    } catch (err) {
-      console.log("Load failed:", err.response?.data);
-    } finally {
-      setLoading(false);
-    }
+      const [br, er] = await Promise.all([api.get("/bookings"), api.get("/equipment")]);
+      setBookings(br.data || []);
+      setEquipment(er.data || []);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { load(); }, []);
 
-  /* ---------- HELPERS ---------- */
-  const getEquipmentNames = (ids) => {
-    if (!ids || ids.length === 0) return "No equipment";
-    return ids
-      .map((id) => {
-        const eq = equipment.find((e) => e._id === id);
-        return eq ? eq.name : id;
-      })
-      .join(", ");
+  const getEquipmentNames = ids => {
+    if (!ids?.length) return "No equipment";
+    return ids.map(id => { const eq = equipment.find(e => e._id === id); return eq ? eq.name : id; }).join(", ");
   };
 
-  const getDays = (start, end) => {
-    if (!start || !end) return 0;
-    const diff =
-      (new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24) + 1;
-    return diff > 0 ? diff : 0;
+  const getDays = (s, e) => {
+    if (!s || !e) return 0;
+    const d = (new Date(e) - new Date(s)) / 86400000 + 1;
+    return d > 0 ? d : 0;
   };
 
-  const getTotal = (ids, start, end) => {
-    if (!ids || ids.length === 0) return 0;
-    const days = getDays(start, end);
-    return ids.reduce((sum, id) => {
-      const eq = equipment.find((e) => e._id === id);
-      return sum + (eq ? eq.dailyRate * days : 0);
-    }, 0);
+  const getTotal = (ids, s, e) => {
+    if (!ids?.length) return 0;
+    const d = getDays(s, e);
+    return ids.reduce((sum, id) => { const eq = equipment.find(q => q._id === id); return sum + (eq ? eq.dailyRate * d : 0); }, 0);
   };
 
-  /* ---------- STATUS ACTIONS ---------- */
-  const approveBooking = async (id) => {
-    await api.post(`/bookings/${id}/approve`);
-    loadData();
-  };
+  const approve   = async id => { await api.post(`/bookings/${id}/approve`);  load(); };
+  const reject    = async id => { await api.post(`/bookings/${id}/reject`);   load(); };
+  const pickup    = async id => { await api.post(`/bookings/${id}/pickup`);   load(); };
+  const returned  = async id => { await api.post(`/bookings/${id}/return`);   load(); };
+  const close     = async id => { await api.post(`/bookings/${id}/close`);    load(); };
 
-  const rejectBooking = async (id) => {
-    await api.post(`/bookings/${id}/reject`);
-    loadData();
-  };
+  const filterOptions = ["ALL", "PENDING_APPROVAL", "APPROVED", "PICKED_UP", "RETURNED", "CLOSED", "REJECTED"];
 
-  const markPickedUp = async (id) => {
-    await api.post(`/bookings/${id}/pickup`);
-    loadData();
-  };
+  const filtered = filter === "ALL" ? bookings : bookings.filter(b => b.status === filter);
 
-  const markReturned = async (id) => {
-    await api.post(`/bookings/${id}/return`);
-    loadData();
-  };
+  const countOf = s => s === "ALL" ? bookings.length : bookings.filter(b => b.status === s).length;
 
-  const closeBooking = async (id) => {
-    await api.post(`/bookings/${id}/close`);
-    loadData();
-  };
-
-  /* ---------- STATUS BADGE ---------- */
-  const StatusBadge = ({ status }) => {
-    const colors = {
-      PENDING_APPROVAL: "bg-yellow-100 text-yellow-700",
-      APPROVED: "bg-blue-100 text-blue-700",
-      PICKED_UP: "bg-orange-100 text-orange-700",
-      RETURNED: "bg-purple-100 text-purple-700",
-      CLOSED: "bg-green-100 text-green-700",
-      REJECTED: "bg-red-100 text-red-700",
-    };
-
-    return (
-      <span
-        className={`inline-block px-3 py-1 text-sm rounded-full font-medium ${
-          colors[status] || "bg-gray-100 text-gray-700"
-        }`}
-      >
-        {status?.replace(/_/g, " ")}
-      </span>
-    );
-  };
-
-  if (loading) return <div className="p-6">Loading bookings...</div>;
+  if (loading) return <div style={{ padding: 32, color: "var(--muted)", fontSize: 14 }}>Loading bookings…</div>;
 
   return (
-    <div className="p-6">
-      <h2 className="text-3xl font-bold mb-6">
-        {role === "admin" ? "All Bookings" : "My Bookings"}
-      </h2>
+    <div>
+      {/* HEADER */}
+      <div className="page-header">
+        <h1 className="page-title">{role === "admin" ? "All Bookings" : "My Bookings"}</h1>
+        <p className="page-subtitle">{bookings.length} booking{bookings.length !== 1 ? "s" : ""} total</p>
+      </div>
 
-      {bookings.length === 0 && (
-        <div className="bg-white p-6 rounded-xl shadow text-gray-500">
-          No bookings found.
+      {/* SUMMARY CHIPS */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+        {[
+          { label: "Total",    val: bookings.length,                                           color: "#475569", bg: "#f8fafc" },
+          { label: "Pending",  val: bookings.filter(b => b.status === "PENDING_APPROVAL").length, color: "#d97706", bg: "#fffbeb" },
+          { label: "Active",   val: bookings.filter(b => ["APPROVED","PICKED_UP"].includes(b.status)).length, color: "#2563eb", bg: "#eff6ff" },
+          { label: "Closed",   val: bookings.filter(b => b.status === "CLOSED").length,        color: "#16a34a", bg: "#f0fdf4" },
+        ].map(c => (
+          <div key={c.label} style={{ padding: "10px 18px", background: c.bg, borderRadius: 12, minWidth: 80 }}>
+            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{c.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: c.color, lineHeight: 1.2, marginTop: 2 }}>{c.val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* FILTER TABS */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
+        {filterOptions.map(s => (
+          <button
+            key={s}
+            onClick={() => setFilter(s)}
+            className="btn"
+            style={{
+              padding: "8px 14px",
+              background: filter === s ? "var(--sidebar-bg)" : "var(--surface)",
+              color: filter === s ? "#fff" : "var(--muted)",
+              border: `1.5px solid ${filter === s ? "var(--sidebar-bg)" : "var(--line)"}`,
+              fontSize: 12.5
+            }}
+          >
+            {s.replace(/_/g, " ")}
+            <span style={{
+              marginLeft: 5,
+              background: filter === s ? "rgba(255,255,255,0.15)" : "var(--bg)",
+              padding: "1px 6px", borderRadius: 8, fontSize: 11
+            }}>
+              {countOf(s)}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* EMPTY */}
+      {filtered.length === 0 && (
+        <div className="card" style={{ textAlign: "center", padding: "56px 24px" }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>No bookings found</div>
+          <div style={{ color: "var(--muted)", fontSize: 13 }}>
+            {filter !== "ALL" ? `No bookings with status "${filter.replace(/_/g, " ")}"` : "No bookings yet."}
+          </div>
         </div>
       )}
 
-      <div className="flex flex-col gap-5">
-        {bookings.map((b) => (
-          <div
-            key={b._id}
-            className="bg-white shadow rounded-xl p-5"
-          >
-            {/* TOP ROW */}
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <p className="text-xs text-gray-400 mb-1">
-                  Booking ID: {b._id}
-                </p>
-                <p className="font-semibold text-lg">
-                  {b.projectId
-                    ? `Project: ${b.projectId}`
-                    : "No Project"}
-                </p>
+      {/* BOOKING CARDS */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {filtered.map(b => {
+          const days  = getDays(b.startDate, b.endDate);
+          const total = getTotal(b.equipmentIds, b.startDate, b.endDate);
+          const stripe = STATUS_STRIPE[b.status] || "#cbd5e1";
+
+          return (
+            <div key={b._id} className="card" style={{ padding: 0, overflow: "hidden" }}>
+              {/* LEFT STRIPE */}
+              <div style={{ display: "flex" }}>
+                <div style={{ width: 4, background: stripe, flexShrink: 0 }} />
+
+                <div style={{ flex: 1, padding: "20px 24px" }}>
+                  {/* TOP ROW */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                    <div>
+                      <code style={{
+                        fontSize: 11, background: "var(--bg)", padding: "3px 8px",
+                        borderRadius: 6, color: "var(--muted)", display: "block", marginBottom: 6
+                      }}>
+                        #{b._id.slice(-8).toUpperCase()}
+                      </code>
+                      <div style={{ fontWeight: 600, fontSize: 15 }}>
+                        {b.startDate}
+                        <span style={{ color: "var(--muted)", margin: "0 8px" }}>→</span>
+                        {b.endDate}
+                        <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 13, marginLeft: 8 }}>
+                          {days} day{days !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: 22, fontWeight: 700, color: "var(--teal)" }}>
+                        ₹{total.toLocaleString("en-IN")}
+                      </span>
+                      <span className={STATUS_BADGE[b.status] || "badge"}>
+                        {(b.status || "").replace(/_/g, " ")}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* DETAIL GRID */}
+                  <div style={{
+                    display: "grid", gridTemplateColumns: "1fr 1fr",
+                    gap: 12, background: "var(--bg)",
+                    borderRadius: 10, padding: "14px 16px", marginBottom: 16
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Equipment</div>
+                      <div style={{ fontSize: 13, color: "var(--text)" }}>{getEquipmentNames(b.equipmentIds)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>
+                        {role === "admin" ? "Customer ID" : "Project"}
+                      </div>
+                      <div style={{ fontSize: 13, color: "var(--text)" }}>
+                        {role === "admin"
+                          ? <code style={{ fontSize: 11 }}>{String(b.userId || "—").slice(-10)}</code>
+                          : b.projectId || "—"
+                        }
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ACTIONS */}
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {role === "admin" && b.status === "PENDING_APPROVAL" && (
+                      <>
+                        <button className="btn btn-sm" onClick={() => approve(b._id)}
+                          style={{ background: "#dcfce7", color: "#166534", border: "1.5px solid #bbf7d0" }}>
+                          ✓ Approve
+                        </button>
+                        <button className="btn btn-danger btn-sm" onClick={() => reject(b._id)}>
+                          ✗ Reject
+                        </button>
+                      </>
+                    )}
+                    {(role === "staff" || role === "admin") && b.status === "APPROVED" && (
+                      <button className="btn btn-sm" onClick={() => pickup(b._id)}
+                        style={{ background: "#fffbeb", color: "#d97706", border: "1.5px solid #fde68a" }}>
+                        📦 Mark Picked Up
+                      </button>
+                    )}
+                    {(role === "staff" || role === "admin") && b.status === "PICKED_UP" && (
+                      <button className="btn btn-sm" onClick={() => returned(b._id)}
+                        style={{ background: "#eff6ff", color: "#2563eb", border: "1.5px solid #bfdbfe" }}>
+                        🔄 Mark Returned
+                      </button>
+                    )}
+                    {role === "admin" && b.status === "RETURNED" && (
+                      <button className="btn btn-primary btn-sm" onClick={() => close(b._id)}>
+                        ✓ Close Booking
+                      </button>
+                    )}
+                    {b.status === "CLOSED" && (
+                      <span style={{ fontSize: 13, color: "var(--success)", fontWeight: 500, padding: "6px 0" }}>
+                        ✓ Booking Complete
+                      </span>
+                    )}
+                    {b.status === "REJECTED" && (
+                      <span style={{ fontSize: 13, color: "var(--danger)", fontWeight: 500, padding: "6px 0" }}>
+                        ✗ Booking Rejected
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <StatusBadge status={b.status} />
             </div>
-
-            {/* DETAILS */}
-            <div className="grid grid-cols-3 gap-4 mb-4 text-sm text-gray-600">
-              <div>
-                <p className="font-medium text-gray-700">Rental Period</p>
-                <p>{b.startDate} → {b.endDate}</p>
-                <p className="text-gray-400">
-                  {getDays(b.startDate, b.endDate)} day(s)
-                </p>
-              </div>
-
-              <div>
-                <p className="font-medium text-gray-700">Equipment</p>
-                <p>{getEquipmentNames(b.equipmentIds)}</p>
-              </div>
-
-              <div>
-                <p className="font-medium text-gray-700">Estimated Total</p>
-                <p className="text-green-600 font-semibold text-base">
-                  ₹ {getTotal(b.equipmentIds, b.startDate, b.endDate)}
-                </p>
-              </div>
-            </div>
-
-            {/* ACTION BUTTONS */}
-            <div className="flex flex-wrap gap-2 mt-2 border-t pt-3">
-
-              {role === "admin" && b.status === "PENDING_APPROVAL" && (
-                <>
-                  <button
-                    onClick={() => approveBooking(b._id)}
-                    className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm"
-                  >
-                    ✓ Approve
-                  </button>
-                  <button
-                    onClick={() => rejectBooking(b._id)}
-                    className="bg-red-500 text-white px-4 py-1.5 rounded-lg text-sm"
-                  >
-                    ✗ Reject
-                  </button>
-                </>
-              )}
-
-              {(role === "staff" || role === "admin") &&
-                b.status === "APPROVED" && (
-                  <button
-                    onClick={() => markPickedUp(b._id)}
-                    className="bg-yellow-500 text-white px-4 py-1.5 rounded-lg text-sm"
-                  >
-                    📦 Mark Picked Up
-                  </button>
-                )}
-
-              {(role === "staff" || role === "admin") &&
-                b.status === "PICKED_UP" && (
-                  <button
-                    onClick={() => markReturned(b._id)}
-                    className="bg-blue-500 text-white px-4 py-1.5 rounded-lg text-sm"
-                  >
-                    🔄 Mark Returned
-                  </button>
-                )}
-
-              {role === "admin" && b.status === "RETURNED" && (
-                <button
-                  onClick={() => closeBooking(b._id)}
-                  className="bg-black text-white px-4 py-1.5 rounded-lg text-sm"
-                >
-                  ✓ Close Booking
-                </button>
-              )}
-
-              {b.status === "CLOSED" && (
-                <span className="text-green-600 text-sm font-medium py-1.5">
-                  ✓ Booking Complete
-                </span>
-              )}
-
-              {b.status === "REJECTED" && (
-                <span className="text-red-500 text-sm font-medium py-1.5">
-                  ✗ Booking Rejected
-                </span>
-              )}
-
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

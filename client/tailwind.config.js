@@ -3,16 +3,17 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "sans-serif"],
+        sans: ["DM Sans", "sans-serif"],
+        serif: ["DM Serif Display", "serif"],
       },
       colors: {
-        bg: "#ECEBE7",
-        surface: "#F6F5F2",
-        primary: "#1A1A1A",
-        secondary: "#6E6E6E",
-        muted: "#9A9A9A",
-        line: "#D6D4CF",
-        accent: "#C9B38C",
+        teal:    "#1EC8A0",
+        "teal-dark": "#17A080",
+        bg:      "#f0f4f8",
+        surface: "#ffffff",
+        text:    "#1a2332",
+        muted:   "#7a8fa6",
+        line:    "#e2e8ef",
       },
     },
   },
