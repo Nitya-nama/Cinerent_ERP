@@ -3,7 +3,7 @@ import axios from "axios";
 export const api = axios.create({
   baseURL: window.location.hostname === "localhost"
     ? "http://127.0.0.1:5000/api"
-    : "https://cinerent-erp-d2fs.onrender.com/",
+    : "https://cinerent-erp-d2fs.onrender.com/api",
 });
 
 // ✅ Attach JWT token to every request
