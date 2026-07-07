@@ -27,13 +27,15 @@ export default function Projects() {
       setForm({ title: "", description: "", startDate: "", endDate: "" });
       setShowForm(false);
       load();
-    } catch { alert("Failed to create project"); }
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to create project");
+    }
   };
 
   const remove = async id => {
     if (!window.confirm("Delete this project?")) return;
     try { await api.delete(`/projects/${id}`); load(); }
-    catch { alert("Failed to delete project"); }
+    catch (err) { alert(err.response?.data?.error || "Failed to delete project"); }
   };
 
   if (loading) return <div style={{ padding: 32, color: "var(--muted)", fontSize: 14 }}>Loading projects…</div>;
@@ -106,6 +108,7 @@ export default function Projects() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
         {projects.map(p => {
           const id = p._id || p.id;
+          if (!id) return null; // guard against malformed records crashing the whole page
           const days = p.startDate && p.endDate
             ? Math.max(0, Math.round((new Date(p.endDate) - new Date(p.startDate)) / 86400000) + 1)
             : null;

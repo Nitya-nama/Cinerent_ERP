@@ -9,23 +9,29 @@ project_bp = Blueprint("projects", __name__)
 @project_bp.post("")
 @require_auth("customer")
 def create_project():
-    data = request.json
+    data = request.json or {}
 
-    if not data.get("projectName") or not data.get("startDate") or not data.get("endDate"):
-        return jsonify({"error": "Missing required fields"}), 400
+    # ✅ accept "title" (what the client form actually sends) and fall back
+    # to "projectName" for backwards compatibility with older clients
+    title = data.get("title") or data.get("projectName")
+
+    if not title:
+        return jsonify({"error": "Project title is required"}), 400
 
     project = {
-        "projectName": data["projectName"],
+        "title": title,
+        "description": data.get("description", ""),
         "shootType": data.get("shootType", ""),
         "location": data.get("location", ""),
         "clientName": data.get("clientName", ""),
-        "startDate": data["startDate"],
-        "endDate": data["endDate"],
+        "startDate": data.get("startDate", ""),
+        "endDate": data.get("endDate", ""),
         "userId": request.user["id"]  # ✅ always store as string
     }
 
-    mongo.db.projects.insert_one(project)
-    return jsonify({"msg": "Project created"}), 201
+    result = mongo.db.projects.insert_one(project)
+    project["_id"] = str(result.inserted_id)
+    return jsonify({"msg": "Project created", "project": project}), 201
 
 
 # CUSTOMER — view own projects
@@ -48,3 +54,24 @@ def get_projects():
             p["userId"] = str(p["userId"])
 
     return jsonify(projects), 200
+
+
+# CUSTOMER — delete own project
+@project_bp.delete("/<project_id>")
+@require_auth("customer")
+def delete_project(project_id):
+    try:
+        oid = ObjectId(project_id)
+    except Exception:
+        return jsonify({"error": "Invalid project id"}), 400
+
+    project = mongo.db.projects.find_one({"_id": oid})
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+
+    # only the owner can delete their own project
+    if str(project.get("userId")) != str(request.user["id"]):
+        return jsonify({"error": "Forbidden"}), 403
+
+    mongo.db.projects.delete_one({"_id": oid})
+    return jsonify({"msg": "Project deleted"}), 200

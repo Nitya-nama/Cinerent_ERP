@@ -60,7 +60,14 @@ export default function App() {
           <Route element={<MainLayout />}>
             <Route path="/customer-dashboard" element={<DashboardRouter />} />
             <Route path="/projects" element={<Projects />} />
-            <Route path="/projects/:projectId/book" element={<CreateBooking />} />
+            {/* ✅ matches the URL Projects.js actually navigates to
+                (/bookings/new?projectId=...) and CreateBooking's use of
+                useSearchParams. The old "/projects/:projectId/book" path
+                never matched, so clicking "Book Equipment" fell through to
+                the "*" fallback route and rendered the Login page — which
+                looked like an unexpected logout even though the user's
+                token/session was still valid. */}
+            <Route path="/bookings/new" element={<CreateBooking />} />
             <Route path="/bookings" element={<Bookings />} />
             <Route path="/invoice/:bookingId" element={<Invoice />} />
           </Route>
