@@ -3,7 +3,23 @@ from config.db import mongo
 from middleware.auth_middleware import require_auth
 from bson import ObjectId
 
+# NEW (Feature 1 — Inventory Management): keeps equipment.status in sync
+# with booking lifecycle. Purely additive — does not change any existing
+# booking route's logic or response, only adds a side-effect call.
+from services.equipment_service import recompute_status_for_ids
+
 booking_bp = Blueprint("booking", __name__)
+
+
+def _sync_equipment_status_for_booking(booking_id):
+    """Best-effort: look up a booking's equipmentIds and recompute their status."""
+    try:
+        b = mongo.db.bookings.find_one({"_id": ObjectId(booking_id)})
+        if b:
+            recompute_status_for_ids(b.get("equipmentIds", []))
+    except Exception as e:
+        # Never let a status-sync problem break the booking action itself.
+        print("EQUIPMENT STATUS SYNC ERROR:", e)
 
 # ================= ASSIGN STAFF =================
 @booking_bp.post("/<id>/assign-staff")
@@ -156,7 +172,11 @@ def create_booking():
         "userId": request.user["id"]
     }
 
-    mongo.db.bookings.insert_one(booking)
+    result = mongo.db.bookings.insert_one(booking)
+
+    # NEW (Feature 1): reflect this new booking in equipment status.
+    recompute_status_for_ids(booking.get("equipmentIds", []))
+
     return jsonify({"msg": "Booking submitted"}), 201
 
 
@@ -168,6 +188,7 @@ def approve_booking(id):
         {"_id": ObjectId(id)},
         {"$set": {"status": "APPROVED"}}
     )
+    _sync_equipment_status_for_booking(id)  # NEW (Feature 1)
     return jsonify({"msg": "approved"}), 200
 
 
@@ -178,6 +199,7 @@ def reject_booking(id):
         {"_id": ObjectId(id)},
         {"$set": {"status": "REJECTED"}}
     )
+    _sync_equipment_status_for_booking(id)  # NEW (Feature 1)
     return jsonify({"msg": "rejected"}), 200
 
 
@@ -188,6 +210,7 @@ def pickup_booking(id):
         {"_id": ObjectId(id)},
         {"$set": {"status": "PICKED_UP"}}
     )
+    _sync_equipment_status_for_booking(id)  # NEW (Feature 1)
     return jsonify({"msg": "picked"}), 200
 
 
@@ -198,6 +221,7 @@ def return_booking(id):
         {"_id": ObjectId(id)},
         {"$set": {"status": "RETURNED"}}
     )
+    _sync_equipment_status_for_booking(id)  # NEW (Feature 1)
     return jsonify({"msg": "returned"}), 200
 
 

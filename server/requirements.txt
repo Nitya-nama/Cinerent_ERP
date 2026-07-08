@@ -8,3 +8,5 @@ gunicorn
 pandas
 openpyxl
 bcrypt
+qrcode
+Pillow
