@@ -8,6 +8,7 @@ import Unauthorized from "./pages/Unauthorized";
 import DashboardRouter from "./pages/DashboardRouter";
 import Equipment from "./pages/Equipment";
 import Analytics from "./pages/Analytics";
+import EquipmentCalendar from "./pages/EquipmentCalendar"; // NEW (Feature 2)
 
 import Bookings from "./pages/Bookings";
 import Invoice from "./pages/Invoice_temp";
@@ -39,6 +40,7 @@ export default function App() {
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<DashboardRouter />} />
             <Route path="/equipment" element={<Equipment />} />
+            <Route path="/equipment-calendar" element={<EquipmentCalendar />} /> {/* NEW (Feature 2) */}
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/create-user" element={<AdminCreateUser />} />
@@ -52,6 +54,7 @@ export default function App() {
           <Route element={<MainLayout />}>
             <Route path="/staff/dashboard" element={<StaffDashboard />} />
             <Route path="/staff/bookings" element={<StaffBookings />} />
+            <Route path="/equipment-calendar" element={<EquipmentCalendar />} /> {/* NEW (Feature 2) */}
           </Route>
         </Route>
 

@@ -1,18 +1,3 @@
-"""
-equipment_service.py
-
-NEW FILE — Feature 1 (Inventory Management)
-
-Isolated helpers for the enhanced inventory system:
-  - QR code generation for equipment
-  - Automatic equipment status recalculation based on active bookings
-
-Nothing here touches the existing booking_service.py or booking_routes.py
-business logic — those files continue to work exactly as before. Callers
-(booking_routes.py) only ADD a call to `recompute_equipment_status(...)`
-after an existing status change, they do not alter existing behavior.
-"""
-
 import io
 import base64
 from bson import ObjectId

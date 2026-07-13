@@ -17,6 +17,13 @@ export default function CreateBooking() {
   const [loading, setLoading]     = useState(false);
   const [search, setSearch]       = useState("");
 
+  // NEW (Feature 2 — Availability Calendar): friendly overlap validation.
+  // Reuses the EXISTING /bookings/check-conflict endpoint (no backend
+  // change). Booking submission logic below is untouched — this only adds
+  // a check before allowing the user to proceed past the dates step.
+  const [conflictMsg, setConflictMsg]   = useState("");
+  const [checkingConflict, setChecking] = useState(false);
+
   useEffect(() => {
     Promise.all([api.get("/equipment"), api.get("/projects")])
       .then(([er, pr]) => {
@@ -64,6 +71,33 @@ export default function CreateBooking() {
     dates.startDate && dates.endDate && dates.endDate >= dates.startDate,
     true
   ][step];
+
+  // NEW (Feature 2) — wraps the existing "Continue" action; only adds a
+  // conflict check when leaving the Dates step. If the check itself fails
+  // for any reason, we fail OPEN (let them proceed) so this can never make
+  // the existing flow more fragile than it already was.
+  const handleContinue = async () => {
+    if (step === 1) {
+      setChecking(true);
+      setConflictMsg("");
+      try {
+        const res = await api.post("/bookings/check-conflict", {
+          equipmentIds: selected,
+          startDate: dates.startDate,
+          endDate: dates.endDate,
+        });
+        if (res.data?.conflict) {
+          setConflictMsg("One or more selected items are already booked for these dates. Please choose different dates or go back and remove the conflicting equipment.");
+          setChecking(false);
+          return;
+        }
+      } catch {
+        // fail open — don't block booking if the check itself errors
+      }
+      setChecking(false);
+    }
+    setStep(s => s + 1);
+  };
 
   return (
     <div>
@@ -185,6 +219,13 @@ export default function CreateBooking() {
             )}
           </div>
 
+          {/* NEW (Feature 2) — friendly overlap warning */}
+          {conflictMsg && (
+            <div className="alert alert-warn" style={{ marginBottom: 20 }}>
+              ⚠️ {conflictMsg}
+            </div>
+          )}
+
           <div className="form-card">
             <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 16 }}>
               Link to Project (optional)
@@ -255,13 +296,13 @@ export default function CreateBooking() {
       {/* NAV BUTTONS */}
       <div style={{ display: "flex", gap: 12, marginTop: 32 }}>
         {step > 0 && (
-          <button className="btn btn-outline" onClick={() => setStep(s => s - 1)}>
+          <button className="btn btn-outline" onClick={() => { setConflictMsg(""); setStep(s => s - 1); }}>
             ← Back
           </button>
         )}
         {step < 2 ? (
-          <button className="btn btn-primary" disabled={!canNext} onClick={() => setStep(s => s + 1)}>
-            Continue →
+          <button className="btn btn-primary" disabled={!canNext || checkingConflict} onClick={handleContinue}>
+            {checkingConflict ? "Checking availability…" : "Continue →"}
           </button>
         ) : (
           <button className="btn btn-primary btn-lg" onClick={submit} disabled={loading}>

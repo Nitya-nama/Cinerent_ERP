@@ -8,6 +8,7 @@ const icons = {
   users:        "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z",
   createUser:   "M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z",
   projects:     "M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z",
+  calendar:     "M8 7V3m8 4V3M3 11h18M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z",
   logout:       "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1",
 };
 
@@ -57,6 +58,7 @@ export default function Sidebar() {
             <div className="sidebar-section-label" style={{ padding: "12px 12px 6px", fontSize: 10 }}>Main</div>
             <NavItem to="/dashboard"         icon="dashboard"   label="Dashboard" />
             <NavItem to="/equipment"          icon="equipment"   label="Equipment" />
+            <NavItem to="/equipment-calendar" icon="calendar"    label="Calendar" />
             <NavItem to="/manage-bookings"    icon="bookings"    label="Bookings" />
             <NavItem to="/analytics"          icon="analytics"   label="Analytics" />
 
@@ -72,6 +74,7 @@ export default function Sidebar() {
             <div className="sidebar-section-label" style={{ padding: "12px 12px 6px", fontSize: 10 }}>Main</div>
             <NavItem to="/staff/dashboard"  icon="dashboard"  label="Dashboard" />
             <NavItem to="/staff/bookings"   icon="bookings"   label="Bookings" />
+            <NavItem to="/equipment-calendar" icon="calendar" label="Calendar" />
           </>
         )}
 
