@@ -47,7 +47,10 @@ export default function Invoice() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   if (loading) return <div style={{ padding: 32, color: "var(--muted)", fontSize: 14 }}>Loading invoice…</div>;
   if (error || !invoice) return <div style={{ padding: 32, color: "var(--danger)" }}>{error || "Invoice not found."}</div>;
