@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom"; // NEW (Feature 3)
 import { api } from "../api/api";
 
 const STATUS_STRIPE = {
@@ -213,6 +214,10 @@ export default function StaffBookings() {
 
                   {/* ACTION BUTTONS */}
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {/* NEW (Feature 3) — view/download invoice, always available */}
+                    <Link to={`/invoice/${b._id}`} className="btn btn-outline btn-sm">
+                      🧾 Invoice
+                    </Link>
                     {b.status === "APPROVED" && (
                       <button
                         className="btn btn-sm"
