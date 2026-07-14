@@ -1,3 +1,18 @@
+"""
+equipment_service.py
+
+NEW FILE — Feature 1 (Inventory Management)
+
+Isolated helpers for the enhanced inventory system:
+  - QR code generation for equipment
+  - Automatic equipment status recalculation based on active bookings
+
+Nothing here touches the existing booking_service.py or booking_routes.py
+business logic — those files continue to work exactly as before. Callers
+(booking_routes.py) only ADD a call to `recompute_equipment_status(...)`
+after an existing status change, they do not alter existing behavior.
+"""
+
 import io
 import base64
 from bson import ObjectId
@@ -72,9 +87,14 @@ def recompute_equipment_status(equipment_id):
 
     eid = str(eq["_id"])
 
+    # FIX: a PENDING_APPROVAL booking is just a request — it hasn't actually
+    # claimed the equipment yet (you might reject it), so it should NOT flip
+    # the equipment to "Reserved". Only an APPROVED booking reserves it, and
+    # PICKED_UP marks it booked/in-use. We still query PENDING_APPROVAL here
+    # (harmless), we simply no longer let it affect the computed status.
     active_bookings = list(mongo.db.bookings.find({
         "equipmentIds": eid,
-        "status": {"$in": ACTIVE_BOOKING_STATUSES}
+        "status": {"$in": ["APPROVED", "PICKED_UP"]}
     }))
 
     new_status = "Available"
@@ -82,7 +102,7 @@ def recompute_equipment_status(equipment_id):
         if b.get("status") == "PICKED_UP":
             new_status = "Booked"
             break
-        elif b.get("status") in ("PENDING_APPROVAL", "APPROVED"):
+        elif b.get("status") == "APPROVED":
             new_status = "Reserved"
 
     if new_status != current_status:

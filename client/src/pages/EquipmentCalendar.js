@@ -93,23 +93,36 @@ export default function EquipmentCalendar() {
 
   const dateRange = useMemo(() => getDateRange(view, refDate), [view, refDate]);
 
-  // For a given equipment + date, figure out the status + any matching booking
+  // For a given equipment + date, figure out the status + any matching booking.
+  // FIX: a PENDING_APPROVAL booking is just a request that hasn't been
+  // approved yet — it should NOT show as "Reserved" (that would incorrectly
+  // suggest the equipment is unavailable before you've even approved
+  // anything). Only APPROVED bookings show as Reserved, PICKED_UP as Booked.
+  // Pending requests still show up as a small marker on an otherwise
+  // "Available" cell, and clicking the cell still reveals them.
   const resolveCell = (eq, date) => {
     const iso = toISODate(date);
 
     if (MANUAL_STATUSES.includes(eq.status)) {
-      return { status: eq.status, booking: null };
+      return { status: eq.status, booking: null, pending: null };
     }
 
-    const match = bookings.find(b =>
+    const overlapping = bookings.filter(b =>
       (b.equipmentIds || []).includes(eq._id) &&
       ["PENDING_APPROVAL", "APPROVED", "PICKED_UP"].includes(b.status) &&
       b.startDate <= iso && b.endDate >= iso
     );
 
-    if (!match) return { status: "Available", booking: null };
-    if (match.status === "PICKED_UP") return { status: "Booked", booking: match };
-    return { status: "Reserved", booking: match };
+    const pickedUp = overlapping.find(b => b.status === "PICKED_UP");
+    if (pickedUp) return { status: "Booked", booking: pickedUp, pending: null };
+
+    const approved = overlapping.find(b => b.status === "APPROVED");
+    if (approved) return { status: "Reserved", booking: approved, pending: null };
+
+    const pending = overlapping.find(b => b.status === "PENDING_APPROVAL");
+    if (pending) return { status: "Available", booking: null, pending };
+
+    return { status: "Available", booking: null, pending: null };
   };
 
   const navigate = (dir) => {
@@ -145,6 +158,9 @@ export default function EquipmentCalendar() {
             <span>{c.dot}</span>{label}
           </div>
         ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--muted)" }}>
+          <span>🕓</span>Pending approval (not yet confirmed)
+        </div>
       </div>
 
       {/* CONTROLS */}
@@ -214,20 +230,24 @@ export default function EquipmentCalendar() {
                     <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 400 }}>{eq.category || "—"}</div>
                   </td>
                   {dateRange.map(d => {
-                    const { status, booking } = resolveCell(eq, d);
+                    const { status, booking, pending } = resolveCell(eq, d);
                     const c = STATUS_COLOR[status] || STATUS_COLOR.Available;
                     return (
                       <td
                         key={toISODate(d)}
-                        onClick={() => setSelectedCell({ equipment: eq, date: d, booking, status })}
+                        onClick={() => setSelectedCell({ equipment: eq, date: d, booking, pending, status })}
                         style={{
                           borderBottom: "1px solid var(--line)", borderLeft: "1px solid var(--line)",
                           padding: "10px 6px", textAlign: "center", cursor: "pointer",
-                          background: c.bg
+                          background: c.bg, position: "relative"
                         }}
-                        title={status}
+                        title={pending ? `${status} (pending request awaiting approval)` : status}
                       >
                         <span style={{ fontSize: 14 }}>{c.dot}</span>
+                        {/* NEW — small marker for a pending (not yet approved) request */}
+                        {pending && (
+                          <span style={{ position: "absolute", top: 2, right: 4, fontSize: 9 }}>🕓</span>
+                        )}
                       </td>
                     );
                   })}
@@ -273,6 +293,17 @@ export default function EquipmentCalendar() {
                 <div><span style={{ color: "var(--muted)" }}>Customer:</span> {userMap[selectedCell.booking.userId] || String(selectedCell.booking.userId || "—")}</div>
                 <div><span style={{ color: "var(--muted)" }}>Pickup Date:</span> {selectedCell.booking.startDate}</div>
                 <div><span style={{ color: "var(--muted)" }}>Return Date:</span> {selectedCell.booking.endDate}</div>
+              </div>
+            ) : selectedCell.pending ? (
+              // NEW — a request exists for this day but hasn't been approved yet
+              <div style={{ display: "grid", gap: 10, fontSize: 13 }}>
+                <div className="alert alert-warn" style={{ marginBottom: 4 }}>
+                  ⏳ There's a pending request for this equipment on this date — it hasn't been approved yet, so the equipment still shows as Available.
+                </div>
+                <div><span style={{ color: "var(--muted)" }}>Booking ID:</span> <code>#{selectedCell.pending._id.slice(-8).toUpperCase()}</code></div>
+                <div><span style={{ color: "var(--muted)" }}>Customer:</span> {userMap[selectedCell.pending.userId] || String(selectedCell.pending.userId || "—")}</div>
+                <div><span style={{ color: "var(--muted)" }}>Requested Pickup:</span> {selectedCell.pending.startDate}</div>
+                <div><span style={{ color: "var(--muted)" }}>Requested Return:</span> {selectedCell.pending.endDate}</div>
               </div>
             ) : (
               <div style={{ fontSize: 13, color: "var(--muted)" }}>

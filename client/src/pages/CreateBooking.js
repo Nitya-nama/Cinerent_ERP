@@ -154,19 +154,26 @@ export default function CreateBooking() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
             {filteredEquipment.map(eq => {
               const isSelected = selected.includes(eq._id);
+              // FIX: equipment marked Under Maintenance / Damaged / Lost must
+              // not be bookable at all, regardless of dates.
+              const OUT_OF_SERVICE = ["Under Maintenance", "Damaged", "Lost"];
+              const isOutOfService = OUT_OF_SERVICE.includes(eq.status);
               return (
                 <div
                   key={eq._id}
-                  onClick={() => toggle(eq._id)}
+                  onClick={() => { if (!isOutOfService) toggle(eq._id); }}
                   style={{
                     border: `2px solid ${isSelected ? "var(--teal)" : "var(--line)"}`,
                     borderRadius: 14, padding: "18px 20px",
-                    background: isSelected ? "var(--teal-dim)" : "var(--surface)",
-                    cursor: "pointer", transition: "all 0.15s",
+                    background: isOutOfService ? "var(--bg)" : (isSelected ? "var(--teal-dim)" : "var(--surface)"),
+                    cursor: isOutOfService ? "not-allowed" : "pointer",
+                    opacity: isOutOfService ? 0.55 : 1,
+                    transition: "all 0.15s",
                     position: "relative"
                   }}
+                  title={isOutOfService ? `Unavailable — ${eq.status}` : undefined}
                 >
-                  {isSelected && (
+                  {isSelected && !isOutOfService && (
                     <div style={{
                       position: "absolute", top: 12, right: 12,
                       width: 22, height: 22, borderRadius: "50%",
@@ -174,6 +181,15 @@ export default function CreateBooking() {
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 12, fontWeight: 700
                     }}>✓</div>
+                  )}
+                  {/* NEW — out-of-service badge, replaces the checkmark position */}
+                  {isOutOfService && (
+                    <div style={{
+                      position: "absolute", top: 12, right: 12,
+                      padding: "3px 8px", borderRadius: 20,
+                      background: "#fee2e2", color: "#b91c1c",
+                      fontSize: 10, fontWeight: 600
+                    }}>{eq.status}</div>
                   )}
                   <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{eq.name}</div>
                   <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 12 }}>{eq.category}</div>
