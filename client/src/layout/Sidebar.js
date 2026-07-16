@@ -74,7 +74,7 @@ export default function Sidebar() {
             <div className="sidebar-section-label" style={{ padding: "12px 12px 6px", fontSize: 10 }}>Main</div>
             <NavItem to="/staff/dashboard"  icon="dashboard"  label="Dashboard" />
             <NavItem to="/staff/bookings"   icon="bookings"   label="Bookings" />
-            <NavItem to="/equipment-calendar" icon="calendar" label="Calendar" />
+            {/* Calendar link removed from staff nav per request */}
           </>
         )}
 

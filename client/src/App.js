@@ -45,7 +45,6 @@ export default function App() {
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/create-user" element={<AdminCreateUser />} />
             <Route path="/manage-bookings" element={<Bookings />} />
-            <Route path="/invoice/:bookingId" element={<Invoice />} />
           </Route>
         </Route>
 
@@ -54,7 +53,7 @@ export default function App() {
           <Route element={<MainLayout />}>
             <Route path="/staff/dashboard" element={<StaffDashboard />} />
             <Route path="/staff/bookings" element={<StaffBookings />} />
-            <Route path="/equipment-calendar" element={<EquipmentCalendar />} /> {/* NEW (Feature 2) */}
+            {/* Calendar removed from staff per request — admin-only now */}
           </Route>
         </Route>
 
@@ -72,6 +71,23 @@ export default function App() {
                 token/session was still valid. */}
             <Route path="/bookings/new" element={<CreateBooking />} />
             <Route path="/bookings" element={<Bookings />} />
+          </Route>
+        </Route>
+
+        {/* SHARED — ADMIN + STAFF + CUSTOMER
+            FIX: /invoice/:bookingId used to be declared separately inside
+            both the ADMIN block and the CUSTOMER block above. React Router
+            only ever renders ONE matching branch for a given URL, and with
+            two equally-specific matches it resolves to whichever is
+            declared first in the tree — the admin-only one. That silently
+            sent every customer (and any staff member, who never had the
+            route at all) straight into that branch's admin-only guard,
+            which correctly denied them — hence "Access Denied" for
+            customer/staff even though a customer-side route definition
+            existed. A single shared route with all three roles allowed
+            fixes this for good. */}
+        <Route element={<ProtectedRoute allow={["admin", "staff", "customer"]} />}>
+          <Route element={<MainLayout />}>
             <Route path="/invoice/:bookingId" element={<Invoice />} />
           </Route>
         </Route>

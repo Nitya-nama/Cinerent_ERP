@@ -7,9 +7,35 @@
 
 import { api } from "../api/api";
 
+function waitForRazorpay(timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const start = Date.now();
+    const interval = setInterval(() => {
+      if (window.Razorpay) {
+        clearInterval(interval);
+        resolve(true);
+      } else if (Date.now() - start > timeoutMs) {
+        clearInterval(interval);
+        resolve(false);
+      }
+    }, 150);
+  });
+}
+
 export async function payWithRazorpay({ bookingId, name, email, onSuccess, onFailure, onDismiss }) {
-  if (!window.Razorpay) {
-    onFailure?.("Payment gateway script hasn't loaded yet. Please refresh and try again.");
+  // FIX: previously this checked window.Razorpay once, synchronously. On a
+  // slower connection (or right after login/navigation) the checkout.js
+  // script can still be loading at that exact moment, which silently
+  // aborted the whole payment flow with no clear next step for the user.
+  // Waiting briefly for it to finish loading fixes that race.
+  const ready = await waitForRazorpay();
+  if (!ready) {
+    onFailure?.(
+      "Payment gateway script couldn't load — this can happen if an ad blocker " +
+      "or browser extension is blocking checkout.razorpay.com. Please disable " +
+      "it for this site, or use Cash on Delivery instead."
+    );
     return;
   }
 

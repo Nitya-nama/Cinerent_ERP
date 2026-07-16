@@ -81,6 +81,21 @@ def create_razorpay_order():
     except Exception as e:
         return jsonify({"error": f"Could not create payment order: {str(e)}"}), 502
 
+    # FIX: previously paymentMethod/paymentStatus were only ever written on
+    # verify() success/failure. If the customer just closed the Razorpay
+    # popup without finishing checkout, the booking kept NO payment fields
+    # at all — which meant the "Pay Now" retry button (and payment badge)
+    # never appeared anywhere, making it look like payment had vanished.
+    # Setting it to Pending here, as soon as an order exists, means the
+    # booking always reflects "a payment is outstanding" until it's Paid.
+    try:
+        mongo.db.bookings.update_one(
+            {"_id": ObjectId(booking_id), "paymentStatus": {"$ne": "Paid"}},
+            {"$set": {"paymentMethod": "Razorpay", "paymentStatus": "Pending"}}
+        )
+    except Exception:
+        pass
+
     # Record the attempt (additive, new collection — nothing existing reads this)
     mongo.db.payments.insert_one({
         "bookingId": booking_id,
