@@ -177,7 +177,11 @@ def create_booking():
     # NEW (Feature 1): reflect this new booking in equipment status.
     recompute_status_for_ids(booking.get("equipmentIds", []))
 
-    return jsonify({"msg": "Booking submitted"}), 201
+    # NEW (Feature 4): include the new booking's id so the frontend can
+    # immediately kick off payment (Razorpay/COD) for it. Purely additive —
+    # the original "msg" key is untouched, so any existing caller reading
+    # only res.data.msg keeps working exactly as before.
+    return jsonify({"msg": "Booking submitted", "id": str(result.inserted_id)}), 201
 
 
 # ================= STATUS ACTIONS =================

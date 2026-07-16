@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom"; // NEW (Feature 3)
 import { api } from "../api/api";
+import { payWithRazorpay } from "../utils/razorpay"; // NEW (Feature 4)
+
+const PAYMENT_BADGE = {
+  Paid:     { bg: "#f0fdf4", color: "#166534" },
+  Pending:  { bg: "#fffbeb", color: "#d97706" },
+  Failed:   { bg: "#fef2f2", color: "#b91c1c" },
+  Refunded: { bg: "#eff6ff", color: "#2563eb" },
+  COD:      { bg: "#fef9c3", color: "#854d0e" },
+};
 
 const STATUS_BADGE = {
   PENDING_APPROVAL: "badge badge-pending",
@@ -37,7 +46,7 @@ export default function Bookings() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getEquipmentNames = ids => {
     if (!ids?.length) return "No equipment";
@@ -61,6 +70,19 @@ export default function Bookings() {
   const pickup    = async id => { await api.post(`/bookings/${id}/pickup`);   load(); };
   const returned  = async id => { await api.post(`/bookings/${id}/return`);   load(); };
   const close     = async id => { await api.post(`/bookings/${id}/close`);    load(); };
+
+  // NEW (Feature 4) — Razorpay retry (customer) + COD collection (staff/admin)
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const retryPayment = (bookingId) => {
+    payWithRazorpay({
+      bookingId,
+      name: user.name,
+      onSuccess: load,
+      onDismiss: () => {},
+      onFailure: (msg) => alert(msg),
+    });
+  };
+  const markCollected = async (id) => { await api.post(`/payments/${id}/mark-collected`); load(); };
 
   const filterOptions = ["ALL", "PENDING_APPROVAL", "APPROVED", "PICKED_UP", "RETURNED", "CLOSED", "REJECTED"];
 
@@ -168,6 +190,17 @@ export default function Bookings() {
                       <span style={{ fontSize: 22, fontWeight: 700, color: "var(--teal)" }}>
                         ₹{total.toLocaleString("en-IN")}
                       </span>
+                      {/* NEW (Feature 4) — payment status badge, only shown once a
+                          payment method has actually been chosen for this booking */}
+                      {b.paymentStatus && (
+                        <span style={{
+                          padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 500,
+                          background: (PAYMENT_BADGE[b.paymentStatus] || {}).bg,
+                          color: (PAYMENT_BADGE[b.paymentStatus] || {}).color,
+                        }}>
+                          {b.paymentMethod ? `${b.paymentMethod} · ` : ""}{b.paymentStatus}
+                        </span>
+                      )}
                       <span className={STATUS_BADGE[b.status] || "badge"}>
                         {(b.status || "").replace(/_/g, " ")}
                       </span>
@@ -203,6 +236,21 @@ export default function Bookings() {
                     <Link to={`/invoice/${b._id}`} className="btn btn-outline btn-sm">
                       🧾 Invoice
                     </Link>
+                    {/* NEW (Feature 4) — retry online payment (customer), when
+                        Razorpay was chosen but hasn't succeeded yet */}
+                    {role !== "admin" && b.paymentMethod === "Razorpay" && ["Pending", "Failed"].includes(b.paymentStatus) && (
+                      <button className="btn btn-sm" onClick={() => retryPayment(b._id)}
+                        style={{ background: "#e6f9f5", color: "#0d9a7e", border: "1.5px solid #99e6d3" }}>
+                        💳 Pay Now
+                      </button>
+                    )}
+                    {/* NEW (Feature 4) — staff/admin collect COD payment (typically at pickup) */}
+                    {(role === "staff" || role === "admin") && b.paymentMethod === "COD" && b.paymentStatus !== "Paid" && (
+                      <button className="btn btn-sm" onClick={() => markCollected(b._id)}
+                        style={{ background: "#fef9c3", color: "#854d0e", border: "1.5px solid #fde047" }}>
+                        💵 Mark COD Collected
+                      </button>
+                    )}
                     {role === "admin" && b.status === "PENDING_APPROVAL" && (
                       <>
                         <button className="btn btn-sm" onClick={() => approve(b._id)}

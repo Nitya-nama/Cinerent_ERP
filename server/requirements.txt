@@ -10,3 +10,4 @@ openpyxl
 bcrypt
 qrcode
 Pillow
+razorpay

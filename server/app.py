@@ -10,6 +10,7 @@ from routes.booking_routes import booking_bp
 from routes.analytics_routes import analytics_bp
 from routes.dashboard import dashboard_bp  # ✅ was never imported
 from routes.invoice_routes import invoice_bp  # NEW (Feature 3)
+from routes.payment_routes import payment_bp  # NEW (Feature 4)
 
 import os
 
@@ -34,6 +35,7 @@ app.register_blueprint(booking_bp, url_prefix="/api/bookings")
 app.register_blueprint(analytics_bp, url_prefix="/api/analytics")
 app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")  # ✅ now registered
 app.register_blueprint(invoice_bp, url_prefix="/api/invoices")  # NEW (Feature 3)
+app.register_blueprint(payment_bp, url_prefix="/api/payments")  # NEW (Feature 4)
 
 @app.route("/")
 def home():

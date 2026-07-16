@@ -1,10 +1,21 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/api";
 
 // NEW (Feature 3) — client-side "true" PDF download, separate from browser Print.
+// Draws the PDF directly with jsPDF's own API rather than snapshotting the
+// DOM (html2canvas), which is fragile in real deployments — it commonly
+// throws a "tainted canvas" error when the page has Google Fonts loaded
+// (exactly the case here), silently breaking the download for every user.
+// This approach has no such dependency and works identically everywhere.
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map(c => c + c).join("") : h;
+  const num = parseInt(full, 16);
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
 
 const PAYMENT_STATUS_STYLE = {
   Paid:     { bg: "#f0fdf4", border: "#bbf7d0", color: "#166534", icon: "✅" },
@@ -24,12 +35,7 @@ export default function Invoice() {
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
-  const printRef = useRef();
   const role = localStorage.getItem("role");
-
-  // NEW — Email Invoice state
-  const [emailing, setEmailing] = useState(false);
-  const [emailMsg, setEmailMsg] = useState("");
 
   // NEW — Download PDF state
   const [downloading, setDownloading] = useState(false);
@@ -64,37 +70,179 @@ export default function Invoice() {
 
   const handlePrint = () => window.print();
 
-  // NEW (Feature 3) — Download PDF: renders the invoice DOM node to a canvas
-  // and saves an actual .pdf file (distinct from the browser's Print dialog).
-  const handleDownloadPdf = async () => {
-    if (!printRef.current) return;
-    setDownloading(true);
-    try {
-      const canvas = await html2canvas(printRef.current, { scale: 2, backgroundColor: "#ffffff" });
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const imgHeight = (canvas.height * pageWidth) / canvas.width;
-      pdf.addImage(imgData, "PNG", 0, 0, pageWidth, imgHeight);
-      pdf.save(`${invoiceNumber}.pdf`);
-    } catch (err) {
-      alert("Could not generate PDF — you can still use Print → Save as PDF.");
-    } finally {
-      setDownloading(false);
+  // NEW (Feature 3) — Download PDF: builds the document with jsPDF's own
+  // text/shape drawing calls (no DOM snapshot involved), so it can't be
+  // broken by web fonts, ad blockers, or browser rendering differences.
+  const buildPdfDoc = () => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginX = 50;
+    let y = 55;
+
+    // Header — logo mark + brand
+    doc.setFillColor(30, 200, 160);
+    doc.circle(marginX + 8, y - 4, 8, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.setTextColor(13, 27, 42);
+    doc.text("CineRent", marginX + 24, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text("Professional Film Equipment Rentals", marginX + 24, y + 14);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(13, 154, 126);
+    doc.text("INVOICE", pageWidth - marginX, y - 6, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text(invoiceNumber, pageWidth - marginX, y + 8, { align: "right" });
+    doc.text(today, pageWidth - marginX, y + 20, { align: "right" });
+
+    y += 40;
+    doc.setDrawColor(243, 244, 246);
+    doc.setLineWidth(1.5);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 30;
+
+    // Three-column billing info
+    const colW = (pageWidth - marginX * 2) / 3;
+    const cols = [marginX, marginX + colW, marginX + colW * 2];
+    const label = (text, x) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(156, 163, 175);
+      doc.text(text.toUpperCase(), x, y);
+    };
+
+    label("From", cols[0]);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(17, 24, 39);
+    doc.text("CineRent Studio", cols[0], y + 16);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(107, 114, 128);
+    doc.text(["Film Equipment Rentals", "Bengaluru, Karnataka 560001", "GST: 29AABCC1234M1Z5"], cols[0], y + 30, { lineHeightFactor: 1.5 });
+
+    label("Bill To", cols[1]);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(17, 24, 39);
+    doc.text(customer?.name || "Customer", cols[1], y + 16);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(107, 114, 128);
+    doc.text(customer?.email || "—", cols[1], y + 30);
+
+    label("Rental Details", cols[2]);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(55, 65, 81);
+    doc.text([
+      `Booking: #${booking._id.slice(-8).toUpperCase()}`,
+      `Pickup: ${booking.startDate}`,
+      `Return: ${booking.endDate}`,
+      `Duration: ${rentalDurationDays} day(s)`,
+    ], cols[2], y + 16, { lineHeightFactor: 1.6 });
+
+    y += 95;
+
+    // Line items table
+    doc.setFillColor(249, 250, 251);
+    doc.rect(marginX, y, pageWidth - marginX * 2, 22, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(156, 163, 175);
+    doc.text("EQUIPMENT", marginX + 8, y + 14);
+    doc.text("CATEGORY", marginX + 210, y + 14);
+    doc.text("RATE", pageWidth - marginX - 130, y + 14, { align: "right" });
+    doc.text("DAYS", pageWidth - marginX - 70, y + 14, { align: "right" });
+    doc.text("AMOUNT", pageWidth - marginX - 6, y + 14, { align: "right" });
+    y += 22;
+
+    lineItems.forEach(item => {
+      doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(17, 24, 39);
+      doc.text(item.name, marginX + 8, y + 16);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(156, 163, 175);
+      doc.text(item.category || "", marginX + 210, y + 16);
+      doc.setFontSize(9); doc.setTextColor(55, 65, 81);
+      doc.text(`Rs.${item.rate.toLocaleString("en-IN")}`, pageWidth - marginX - 130, y + 16, { align: "right" });
+      doc.text(String(item.days), pageWidth - marginX - 70, y + 16, { align: "right" });
+      doc.setFont("helvetica", "bold");
+      doc.text(`Rs.${item.total.toLocaleString("en-IN")}`, pageWidth - marginX - 6, y + 16, { align: "right" });
+      doc.setDrawColor(243, 244, 246);
+      doc.line(marginX, y + 26, pageWidth - marginX, y + 26);
+      y += 26;
+    });
+
+    y += 24;
+
+    // QR code (left) — our qrCode is already a base64 PNG data URI generated
+    // server-side, so there's no network fetch / CORS involved here at all.
+    if (qrCode) {
+      try {
+        doc.addImage(qrCode, "PNG", marginX, y, 70, 70);
+        doc.setFontSize(7); doc.setTextColor(156, 163, 175);
+        doc.text("Scan to verify", marginX + 35, y + 82, { align: "center" });
+      } catch { /* non-fatal — PDF still generates without the QR image */ }
     }
+
+    // Totals (right-aligned)
+    const totalsX = pageWidth - marginX - 200;
+    let ty = y;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(107, 114, 128);
+    doc.text("Subtotal", totalsX, ty + 10);
+    doc.setTextColor(17, 24, 39);
+    doc.text(`Rs.${subtotal.toLocaleString("en-IN")}`, pageWidth - marginX, ty + 10, { align: "right" });
+    ty += 20;
+
+    if (discount > 0) {
+      doc.setTextColor(22, 163, 74);
+      doc.text(`Discount${existingDiscountReason ? ` (${existingDiscountReason})` : ""}`, totalsX, ty + 10);
+      doc.text(`- Rs.${discount.toLocaleString("en-IN")}`, pageWidth - marginX, ty + 10, { align: "right" });
+      ty += 20;
+    }
+
+    doc.setTextColor(107, 114, 128);
+    doc.text("GST (18%)", totalsX, ty + 10);
+    doc.setTextColor(17, 24, 39);
+    doc.text(`Rs.${gst.toLocaleString("en-IN")}`, pageWidth - marginX, ty + 10, { align: "right" });
+    ty += 26;
+
+    doc.setDrawColor(229, 231, 235);
+    doc.line(totalsX, ty, pageWidth - marginX, ty);
+    ty += 20;
+
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(17, 24, 39);
+    doc.text("Grand Total", totalsX, ty);
+    doc.setFontSize(16); doc.setTextColor(30, 200, 160);
+    doc.text(`Rs.${grandTotal.toLocaleString("en-IN")}`, pageWidth - marginX, ty, { align: "right" });
+
+    y = Math.max(y + 100, ty + 30);
+
+    // Payment status band
+    const [bgR, bgG, bgB] = hexToRgb(payStyle.bg);
+    const [cR, cG, cB] = hexToRgb(payStyle.color);
+    doc.setFillColor(bgR, bgG, bgB);
+    doc.roundedRect(marginX, y, pageWidth - marginX * 2, 40, 6, 6, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(cR, cG, cB);
+    doc.text(`Payment ${paymentStatus}`, marginX + 14, y + 18);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(156, 163, 175);
+    doc.text(`Booking Status: ${(booking.status || "").replace(/_/g, " ")}`, marginX + 14, y + 30);
+    doc.setFontSize(9); doc.setTextColor(55, 65, 81);
+    doc.text(`Method: ${paymentMethod}`, pageWidth - marginX - 14, y + 24, { align: "right" });
+
+    y += 70;
+    doc.setDrawColor(243, 244, 246);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 20;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(156, 163, 175);
+    doc.text("Thank you for choosing CineRent. For queries: rentals@cinerent.in . +91 98765 43210", pageWidth / 2, y, { align: "center" });
+
+    return doc;
   };
 
-  // NEW (Feature 3) — Email Invoice
-  const handleEmail = async () => {
-    setEmailing(true);
-    setEmailMsg("");
+  const handleDownloadPdf = () => {
+    setDownloading(true);
     try {
-      const res = await api.post(`/invoices/${id}/email`);
-      setEmailMsg(res.data?.msg || "Invoice emailed.");
+      const doc = buildPdfDoc();
+      doc.save(`${invoiceNumber}.pdf`);
     } catch (err) {
-      setEmailMsg(err.response?.data?.error || "Could not send email.");
+      console.error("PDF generation failed:", err);
+      alert("Could not generate the PDF. You can still use Print → Save as PDF as a fallback.");
     } finally {
-      setEmailing(false);
+      setDownloading(false);
     }
   };
 
@@ -126,19 +274,10 @@ export default function Invoice() {
         <button className="btn btn-outline" onClick={handlePrint}>
           🖨️ Print
         </button>
-        <button className="btn btn-outline" onClick={handleEmail} disabled={emailing}>
-          {emailing ? "Sending…" : "✉️ Email Invoice"}
-        </button>
         <button className="btn btn-outline" onClick={() => window.history.back()}>
           ← Back
         </button>
       </div>
-
-      {emailMsg && (
-        <div className="no-print alert alert-warn" style={{ marginBottom: 20, maxWidth: 780 }}>
-          {emailMsg}
-        </div>
-      )}
 
       {/* NEW — admin-only discount control, sits above the printable document */}
       {role === "admin" && (
@@ -170,7 +309,7 @@ export default function Invoice() {
       )}
 
       {/* INVOICE DOCUMENT */}
-      <div ref={printRef} style={{
+      <div style={{
         background: "#fff", borderRadius: 16, padding: "48px 52px",
         maxWidth: 780, boxShadow: "0 4px 24px rgba(0,0,0,0.07)",
         fontFamily: "'DM Sans', sans-serif",

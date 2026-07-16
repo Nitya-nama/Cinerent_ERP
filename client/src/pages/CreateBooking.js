@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/api";
+import { payWithRazorpay } from "../utils/razorpay"; // NEW (Feature 4)
 
 const STEPS = ["Select Equipment", "Choose Dates", "Review & Book"];
 
@@ -23,6 +24,10 @@ export default function CreateBooking() {
   // a check before allowing the user to proceed past the dates step.
   const [conflictMsg, setConflictMsg]   = useState("");
   const [checkingConflict, setChecking] = useState(false);
+
+  // NEW (Feature 4) — payment method selection at booking time
+  const [paymentMethod, setPaymentMethod] = useState("Razorpay"); // "Razorpay" | "COD"
+  const [paymentMsg, setPaymentMsg]       = useState("");
 
   useEffect(() => {
     Promise.all([api.get("/equipment"), api.get("/projects")])
@@ -50,12 +55,51 @@ export default function CreateBooking() {
   const submit = async () => {
     try {
       setLoading(true);
-      await api.post("/bookings", {
+      setPaymentMsg("");
+      // Existing booking creation — completely unchanged.
+      const res = await api.post("/bookings", {
         equipmentIds: selected,
         startDate: dates.startDate,
         endDate: dates.endDate,
         projectId: projectId || undefined,
       });
+
+      // NEW (Feature 4) — kick off payment for the booking we just created.
+      // The booking id is now returned additively alongside the original
+      // "msg" field (see server/routes/booking_routes.py), so this doesn't
+      // depend on any change to the original response shape being relied on
+      // elsewhere.
+      const bookingId = res.data?.id;
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+      if (bookingId && paymentMethod === "COD") {
+        try {
+          await api.post("/payments/cod/select", { bookingId });
+        } catch {
+          // Non-fatal — booking already exists; payment method can still be
+          // sorted out later from the Bookings list.
+        }
+        navigate("/bookings");
+        return;
+      }
+
+      if (bookingId && paymentMethod === "Razorpay") {
+        setLoading(false);
+        payWithRazorpay({
+          bookingId,
+          name: user.name,
+          onSuccess: () => navigate("/bookings"),
+          onDismiss: () => navigate("/bookings"), // booking still exists, just unpaid — can retry from Bookings
+          onFailure: (msg) => {
+            setPaymentMsg(msg + " Your booking was created — you can retry payment from the Bookings page.");
+            navigate("/bookings");
+          },
+        });
+        return;
+      }
+
+      // Fallback (no bookingId returned, e.g. an older backend) — behave
+      // exactly like the original flow.
       navigate("/bookings");
     } catch { alert("Failed to create booking"); }
     finally { setLoading(false); }
@@ -303,6 +347,43 @@ export default function CreateBooking() {
             </div>
           </div>
 
+          {/* NEW (Feature 4) — Payment Method selection */}
+          <div className="form-card" style={{ marginBottom: 20 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 16 }}>
+              Payment Method
+            </h3>
+            <div style={{ display: "flex", gap: 12 }}>
+              <div
+                onClick={() => setPaymentMethod("Razorpay")}
+                style={{
+                  flex: 1, cursor: "pointer", borderRadius: 12, padding: "14px 16px",
+                  border: `2px solid ${paymentMethod === "Razorpay" ? "var(--teal)" : "var(--line)"}`,
+                  background: paymentMethod === "Razorpay" ? "var(--teal-dim)" : "var(--surface)"
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>💳 Pay Online</div>
+                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>Razorpay — Cards, UPI, Netbanking</div>
+              </div>
+              <div
+                onClick={() => setPaymentMethod("COD")}
+                style={{
+                  flex: 1, cursor: "pointer", borderRadius: 12, padding: "14px 16px",
+                  border: `2px solid ${paymentMethod === "COD" ? "var(--teal)" : "var(--line)"}`,
+                  background: paymentMethod === "COD" ? "var(--teal-dim)" : "var(--surface)"
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>💵 Cash on Delivery</div>
+                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>Pay at pickup</div>
+              </div>
+            </div>
+          </div>
+
+          {paymentMsg && (
+            <div className="alert alert-warn" style={{ marginBottom: 20 }}>
+              ⚠️ {paymentMsg}
+            </div>
+          )}
+
           <div className="alert alert-warn" style={{ marginBottom: 20 }}>
             Your booking will be submitted for admin approval. You'll be notified once approved.
           </div>
@@ -322,7 +403,7 @@ export default function CreateBooking() {
           </button>
         ) : (
           <button className="btn btn-primary btn-lg" onClick={submit} disabled={loading}>
-            {loading ? "Submitting…" : "Submit Booking Request"}
+            {loading ? "Submitting…" : paymentMethod === "Razorpay" ? "Submit & Pay Now" : "Submit Booking Request"}
           </button>
         )}
         <button className="btn btn-ghost" onClick={() => navigate(-1)}>Cancel</button>

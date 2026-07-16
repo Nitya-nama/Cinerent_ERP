@@ -20,6 +20,15 @@ const STATUS_BADGE = {
   REJECTED:         "badge badge-rejected",
 };
 
+// NEW (Feature 4)
+const PAYMENT_BADGE = {
+  Paid:     { bg: "#f0fdf4", color: "#166534" },
+  Pending:  { bg: "#fffbeb", color: "#d97706" },
+  Failed:   { bg: "#fef2f2", color: "#b91c1c" },
+  Refunded: { bg: "#eff6ff", color: "#2563eb" },
+  COD:      { bg: "#fef9c3", color: "#854d0e" },
+};
+
 export default function StaffBookings() {
   const [bookings, setBookings]   = useState([]);
   const [equipment, setEquipment] = useState([]);
@@ -37,7 +46,7 @@ export default function StaffBookings() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getEquipmentNames = ids =>
     (ids || []).map(id => equipment.find(e => e._id === id)?.name || id).join(", ") || "—";
@@ -73,6 +82,8 @@ export default function StaffBookings() {
 
   const pickup    = async id => { try { await api.post(`/bookings/${id}/pickup`); load(); } catch { alert("Action failed"); } };
   const doReturn  = async id => { try { await api.post(`/bookings/${id}/return`); load(); } catch { alert("Action failed"); } };
+  // NEW (Feature 4) — staff collects COD payment, typically at pickup
+  const markCollected = async id => { try { await api.post(`/payments/${id}/mark-collected`); load(); } catch { alert("Action failed"); } };
 
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300, color: "var(--muted)", fontSize: 14 }}>
@@ -188,6 +199,16 @@ export default function StaffBookings() {
                         <span className={STATUS_BADGE[b.status] || "badge"}>
                           {(b.status || "").replace(/_/g, " ")}
                         </span>
+                        {/* NEW (Feature 4) */}
+                        {b.paymentStatus && (
+                          <span style={{
+                            padding: "3px 8px", borderRadius: 20, fontSize: 11, fontWeight: 500,
+                            background: (PAYMENT_BADGE[b.paymentStatus] || {}).bg,
+                            color: (PAYMENT_BADGE[b.paymentStatus] || {}).color,
+                          }}>
+                            {b.paymentMethod ? `${b.paymentMethod} · ` : ""}{b.paymentStatus}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontWeight: 600, fontSize: 14 }}>
                         {b.startDate}
@@ -218,6 +239,13 @@ export default function StaffBookings() {
                     <Link to={`/invoice/${b._id}`} className="btn btn-outline btn-sm">
                       🧾 Invoice
                     </Link>
+                    {/* NEW (Feature 4) — collect COD payment */}
+                    {b.paymentMethod === "COD" && b.paymentStatus !== "Paid" && (
+                      <button className="btn btn-sm" onClick={() => markCollected(b._id)}
+                        style={{ background: "#fef9c3", color: "#854d0e", border: "1.5px solid #fde047" }}>
+                        💵 Mark COD Collected
+                      </button>
+                    )}
                     {b.status === "APPROVED" && (
                       <button
                         className="btn btn-sm"
